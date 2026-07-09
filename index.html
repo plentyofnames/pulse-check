@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PCM 70 Editor</title>
+<style>
+  :root {
+    /* light — "silkscreen on aluminum" */
+    --ground: #e2e4e6;
+    --panel: #f3f4f5;
+    --panel-2: #e9eaec;
+    --well: #dcdee1;
+    --ink: #1c1f23;
+    --ink-soft: #5c636b;
+    --line: #c6cacf;
+    --line-soft: #d6d9dd;
+    --accent: #0c8d77;
+    --accent-soft: rgba(12, 141, 119, 0.14);
+    --amber: #a56000;
+    --led-ok: #0c8d77;
+    --led-bad: #c0392b;
+    --vfd-bg: #0e1512;
+    --vfd-dim: #1c2b25;
+    --vfd-ink: #46f0c6;
+    --btn-ink: #f3f4f5;
+    --shadow: 0 1px 2px rgba(20, 24, 28, 0.10), 0 4px 14px rgba(20, 24, 28, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0a0c0e; --panel: #14171b; --panel-2: #191d22; --well: #0f1215;
+      --ink: #d7dbe0; --ink-soft: #8a919a; --line: #2a2f36; --line-soft: #22262c;
+      --accent: #3ee3bf; --accent-soft: rgba(62,227,191,0.12); --amber: #ffb454;
+      --led-ok: #3ee3bf; --led-bad: #ff6b5a; --vfd-bg: #0b120f; --vfd-dim: #17251f; --vfd-ink: #46f0c6;
+      --btn-ink: #0a0c0e;
+      --shadow: 0 1px 2px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #e2e4e6; --panel: #f3f4f5; --panel-2: #e9eaec; --well: #dcdee1;
+    --ink: #1c1f23; --ink-soft: #5c636b; --line: #c6cacf; --line-soft: #d6d9dd;
+    --accent: #0c8d77; --accent-soft: rgba(12,141,119,0.14); --amber: #a56000;
+    --led-ok: #0c8d77; --led-bad: #c0392b; --vfd-bg: #0e1512; --vfd-dim: #1c2b25; --vfd-ink: #46f0c6;
+    --btn-ink: #f3f4f5;
+    --shadow: 0 1px 2px rgba(20,24,28,0.10), 0 4px 14px rgba(20,24,28,0.06);
+  }
+  :root[data-theme="dark"] {
+    --ground: #0a0c0e; --panel: #14171b; --panel-2: #191d22; --well: #0f1215;
+    --ink: #d7dbe0; --ink-soft: #8a919a; --line: #2a2f36; --line-soft: #22262c;
+    --accent: #3ee3bf; --accent-soft: rgba(62,227,191,0.12); --amber: #ffb454;
+    --led-ok: #3ee3bf; --led-bad: #ff6b5a; --vfd-bg: #0b120f; --vfd-dim: #17251f; --vfd-ink: #46f0c6;
+    --btn-ink: #0a0c0e;
+    --shadow: 0 1px 2px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 13px/1.45 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  .app { max-width: 1440px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ---------- top rack strip ---------- */
+  .rack {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  }
+  .brand { display: flex; flex-direction: column; gap: 1px; min-width: 128px; }
+  .brand .logo { font-weight: 800; font-size: 17px; letter-spacing: 0.02em; }
+  .brand .logo u { text-decoration: none; border-bottom: 2px solid var(--ink); padding-bottom: 1px; }
+  .brand .sub { font-size: 9.5px; letter-spacing: 0.18em; color: var(--ink-soft); text-transform: uppercase; }
+
+  .vfd {
+    background: var(--vfd-bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 9px 16px 8px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--vfd-ink);
+    text-shadow: 0 0 6px color-mix(in srgb, var(--vfd-ink) 55%, transparent);
+    letter-spacing: 0.14em;
+    font-size: 15px;
+    white-space: nowrap;
+    display: flex; flex-direction: column; gap: 2px;
+    min-width: 300px;
+  }
+  .vfd .row2 { font-size: 10.5px; letter-spacing: 0.18em; color: var(--vfd-ink); opacity: 0.55; }
+
+  .rack .spacer { flex: 1; }
+
+  .field { display: flex; flex-direction: column; gap: 3px; }
+  .field > label {
+    font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 600;
+  }
+  select, input[type="text"] {
+    background: var(--well);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font: inherit;
+    font-size: 12.5px;
+  }
+  select:focus-visible, input:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+
+  .led-field { display: flex; align-items: center; gap: 7px; align-self: flex-end; padding-bottom: 6px; }
+  .led {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--ink-soft);
+  }
+  .led.ok { background: var(--led-ok); box-shadow: 0 0 6px var(--led-ok); }
+  .led.bad { background: var(--led-bad); box-shadow: 0 0 6px var(--led-bad); }
+  .led-field span.txt { font-size: 11px; color: var(--ink-soft); }
+
+  .btn {
+    font: inherit; font-weight: 700; font-size: 12px; letter-spacing: 0.08em;
+    border-radius: 4px; padding: 8px 16px; cursor: pointer;
+    border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--ink);
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--btn-ink); }
+  .btn.icon { padding: 8px 10px; }
+  .btn-group { display: flex; gap: 8px; align-items: flex-end; }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-soft); align-self: flex-end; padding-bottom: 8px; cursor: pointer; user-select: none; }
+  .toggle .sw {
+    width: 28px; height: 16px; border-radius: 9px; background: var(--line); position: relative; flex: none;
+    transition: background 0.12s;
+  }
+  .toggle.on .sw { background: var(--accent); }
+  .toggle .sw::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--btn-ink); transition: left 0.12s;
+  }
+  .toggle.on .sw::after { left: 14px; }
+
+  /* ---------- main grid ---------- */
+  .main { display: grid; grid-template-columns: 218px minmax(0, 1fr) 332px; gap: 12px; align-items: start; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+  }
+  .panel-head {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  }
+  .panel-head h2 {
+    margin: 0; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700;
+  }
+  .panel-head .hint { font-size: 10.5px; color: var(--ink-soft); }
+
+  /* librarian */
+  .lib-tabs { display: flex; gap: 2px; padding: 8px 8px 0; }
+  .lib-tabs button {
+    flex: 1; font: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+    padding: 6px 4px; cursor: pointer;
+    border: 1px solid var(--line); border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    background: var(--panel-2); color: var(--ink-soft);
+  }
+  .lib-tabs button.on { background: var(--panel); color: var(--ink); border-color: var(--line); }
+  .lib-list { list-style: none; margin: 0; padding: 6px; border-top: 1px solid var(--line-soft); max-height: 460px; overflow-y: auto; }
+  .lib-list li {
+    display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 6px;
+    padding: 5px 8px; border-radius: 4px; cursor: pointer;
+  }
+  .lib-list li:hover { background: var(--panel-2); }
+  .lib-list li.on { background: var(--accent-soft); }
+  .lib-list .num { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; color: var(--ink-soft); }
+  .lib-list li.on .num { color: var(--accent); font-weight: 700; }
+  .lib-list .nm { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lib-list .type {
+    font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-soft); border: 1px solid var(--line); border-radius: 3px; padding: 1px 4px;
+  }
+  .lib-list .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); justify-self: end; }
+  .lib-foot { padding: 8px; border-top: 1px solid var(--line-soft); display: flex; gap: 6px; }
+  .lib-foot .btn { flex: 1; padding: 6px 4px; font-size: 10.5px; font-weight: 600; }
+  .lib-empty { padding: 24px 12px; text-align: center; color: var(--ink-soft); font-size: 11.5px; }
+
+  /* program editor */
+  .prog-head {
+    padding: 12px 14px;
+    display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .prog-head .name-wrap { position: relative; }
+  .prog-head input[type="text"] {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: 0.08em; width: 168px; text-transform: uppercase;
+  }
+  .edited-dot {
+    position: absolute; top: -3px; right: -3px; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--amber); display: none;
+  }
+  .edited-dot.on { display: block; }
+  .algo-chip {
+    align-self: flex-end; margin-left: auto;
+    font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700;
+    color: var(--accent); background: var(--accent-soft);
+    padding: 5px 10px; border-radius: 4px; margin-bottom: 2px;
+  }
+
+  .rows { padding: 6px 14px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .rowgroup { padding: 10px 0 4px; border-bottom: 1px solid var(--line-soft); }
+  .rowgroup:last-child { border-bottom: none; }
+  .rowgroup > h3 {
+    margin: 0 0 8px;
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .rowgroup > h3 .rn {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--accent); font-size: 11px;
+  }
+  .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px 14px; }
+
+  .param { display: flex; flex-direction: column; gap: 3px; padding: 4px 0; }
+  .param .top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .param .lbl {
+    font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .param .val {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 12.5px; color: var(--ink); white-space: nowrap;
+    border-bottom: 1px dashed var(--line); cursor: text;
+  }
+  .param .val:hover { background: var(--accent-soft); }
+  .param .val.oor { color: var(--amber); }
+  .param.touched .val { color: var(--accent); font-weight: 600; }
+  .param .val-input {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px; width: 72px; padding: 0 2px;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 18px; margin: 0;
+    background: transparent; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px; background: var(--well);
+    border: 1px solid var(--line-soft);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--accent); margin-top: -5.5px;
+    border: 2px solid var(--panel);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  input[type="range"]::-moz-range-track {
+    height: 4px; border-radius: 2px; background: var(--well); border: 1px solid var(--line-soft);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 11px; height: 11px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--panel);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .param select { padding: 3px 6px; font-size: 11.5px; }
+
+  /* patch bay */
+  .patch-table { padding: 8px 10px 4px; display: flex; flex-direction: column; }
+  .patch-cols {
+    display: grid; grid-template-columns: 22px 1fr 1fr 74px; gap: 6px;
+    padding: 2px 4px 6px;
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 700;
+  }
+  .patch-row {
+    display: grid; grid-template-columns: 22px 1fr 1fr 74px; gap: 6px; align-items: center;
+    padding: 4px; border-radius: 4px;
+  }
+  .patch-row:nth-child(odd) { background: var(--panel-2); }
+  .patch-row .pn {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px; color: var(--ink-soft); text-align: center;
+  }
+  .patch-row select { width: 100%; padding: 4px 4px; font-size: 11px; }
+  .patch-row .scale { display: flex; align-items: center; gap: 7px; justify-content: flex-end; }
+  .knob {
+    width: 22px; height: 22px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle at 35% 30%, var(--panel-2), var(--well) 70%);
+    border: 1px solid var(--line);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.25);
+    position: relative; cursor: ns-resize;
+  }
+  .knob::before {
+    content: ""; position: absolute; left: 50%; top: 1.5px;
+    width: 2px; height: 8px; margin-left: -1px; border-radius: 1px;
+    background: var(--accent);
+    transform-origin: 1px 9.5px;
+    transform: rotate(var(--rot, 0deg));
+  }
+  .patch-row .scale .sv {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px; width: 34px; text-align: right;
+    background: var(--well); color: var(--ink);
+    border: 1px solid var(--line-soft); border-radius: 3px; padding: 2px 3px;
+  }
+  .patch-row.active .pn { color: var(--accent); font-weight: 700; }
+  .patch-row.off select, .patch-row.off .scale { opacity: 0.45; }
+  .patch-note { padding: 8px 14px 12px; font-size: 10.5px; color: var(--ink-soft); line-height: 1.5; }
+
+  /* footer console */
+  .console {
+    background: var(--vfd-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: var(--vfd-ink);
+    opacity: 0.92;
+    display: flex; flex-direction: column; gap: 3px;
+    max-height: 140px; overflow-y: auto;
+  }
+  .console .line { display: flex; gap: 12px; white-space: nowrap; }
+  .console .dir { opacity: 0.55; width: 20px; flex: none; }
+  .console .dim { opacity: 0.5; }
+
+  @media (max-width: 1120px) {
+    .main { grid-template-columns: 200px minmax(0, 1fr); }
+    .patchbay { grid-column: 1 / -1; }
+  }
+  @media (max-width: 760px) {
+    .main { grid-template-columns: 1fr; }
+    .vfd { min-width: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== rack strip: identity + display + MIDI + transfer ===== -->
+  <header class="rack">
+    <div class="brand">
+      <div class="logo"><u>lexicon</u> PCM 70</div>
+      <div class="sub">Digital Effects Processor · V3.00</div>
+    </div>
+
+    <div class="vfd" id="vfd">
+      <div id="vfdLine1">— NO PROGRAM —</div>
+      <div class="row2" id="vfdLine2">CONNECT MIDI TO BEGIN</div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="field">
+      <label for="midiOut">MIDI out</label>
+      <select id="midiOut"><option>—</option></select>
+    </div>
+    <div class="field">
+      <label for="midiIn">MIDI in</label>
+      <select id="midiIn"><option>—</option></select>
+    </div>
+    <div class="field">
+      <label for="midiCh">Channel</label>
+      <select id="midiCh"></select>
+    </div>
+    <div class="led-field"><span class="led" id="connLed"></span><span class="txt" id="connTxt">Offline</span></div>
+
+    <div class="toggle" id="autoSend" role="switch" aria-checked="true" tabindex="0"><span class="sw"></span> Auto-send</div>
+    <div class="btn-group">
+      <button class="btn" id="btnGet">Get</button>
+      <button class="btn primary" id="btnPut">Put</button>
+      <button class="btn icon" id="btnTheme" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
+    </div>
+  </header>
+
+  <!-- ===== main grid ===== -->
+  <div class="main">
+
+    <!-- librarian -->
+    <aside class="panel">
+      <div class="lib-tabs" id="libTabs">
+        <button class="on" data-tab="registers">Registers</button>
+        <button data-tab="presets">Presets</button>
+        <button data-tab="library">Library</button>
+      </div>
+      <ul class="lib-list" id="libList">
+        <li class="lib-empty">Not connected.</li>
+      </ul>
+      <div class="lib-foot">
+        <button class="btn" id="btnBackup">Backup all (.syx)</button>
+        <button class="btn" id="btnImport">Import</button>
+      </div>
+    </aside>
+
+    <!-- program editor -->
+    <section class="panel">
+      <div class="prog-head">
+        <div class="field">
+          <label for="progSel">Program</label>
+          <select id="progSel"></select>
+        </div>
+        <div class="field">
+          <label for="progName">Register name</label>
+          <span class="name-wrap">
+            <input id="progName" type="text" value="" maxlength="14" autocomplete="off" spellcheck="false">
+            <span class="edited-dot" id="editedDot" title="edited since last Put"></span>
+          </span>
+        </div>
+        <span class="algo-chip" id="algoChip">—</span>
+      </div>
+
+      <div class="rows" id="paramRows">
+        <div class="lib-empty">Get a program from the unit, or pick one from the librarian.</div>
+      </div>
+    </section>
+
+    <!-- Dynamic MIDI patch bay -->
+    <aside class="panel patchbay">
+      <div class="panel-head">
+        <h2>Dynamic MIDI</h2>
+        <span class="hint">Row 5 · 10 patches</span>
+      </div>
+      <div class="patch-table" id="patchTable">
+        <div class="patch-cols"><span>#</span><span>Source</span><span>Destination</span><span>Scale</span></div>
+        <!-- 10 patch rows injected by UI.renderPatchBay() -->
+      </div>
+      <p class="patch-note">
+        Sources: Ctrl 0–31, Switch 64–95, Pitch Wheel, After Touch, Last Note, Velocity, Soft Knob, MIDI Clock.
+        Destinations list only the parameters of the loaded program. Scale is ±128; negative values invert the controller.
+      </p>
+    </aside>
+  </div>
+
+  <!-- sysex console -->
+  <div class="console" id="console">
+    <div class="line"><span class="dim">Console ready — TX/RX will appear here.</span></div>
+  </div>
+</div>
+
+<script src="pcm70-data.js"></script>
+<script src="pcm70-core.js"></script>
+<script>
+"use strict";
+/* ============================================================================
+ * PCM 70 Editor — application logic (DOM / I/O layer)
+ *
+ * The pure byte + conversion layer (Sysex / Codec / Convert) lives in
+ * pcm70-core.js and is exposed as window.PCM70CORE. This file holds the parts
+ * that touch the DOM, Web MIDI, and localStorage:
+ *   4. Midi     Web MIDI ports + the ONLY place bytes enter/leave; paced queue
+ *   5. Store    working copy + dirty/origin state; mutations fire one onChange
+ *   6. UI       single render path (with { silent }); widget factories
+ *   7. Librarian register sweep, localStorage, .syx / JSON import-export
+ *   8. Log      ring buffer of decoded TX/RX + console render
+ * ==========================================================================*/
+
+const DATA = window.PCM70;
+const { Sysex, Codec, Convert } = window.PCM70CORE;
+
+/* ---- 4. Midi ---------------------------------------------------------- */
+// Web MIDI: the ONLY place bytes enter/leave the app. One paced send queue with
+// per-key trailing coalescing (knob drags collapse to their latest value); one
+// pending-request slot (the Reflex pattern, promisified) for dump replies.
+const SEND_INTERVAL_MS = 30; // manual floor between stored bulk msgs; single tunable
+
+const Midi = {
+  access: null,
+  out: null,
+  in: null,
+  _queue: [],            // [{ bytes, coalesceKey }]
+  _coalesced: new Map(), // coalesceKey -> index into _queue
+  _pumpTimer: null,
+  _pending: null,        // { match(parsed):bool, resolve, reject, timer }
+
+  async connect() {
+    if (!navigator.requestMIDIAccess) {
+      Log.info("Web MIDI unavailable — use Chrome, Edge, or Opera.");
+      UI.setConnState("bad", "No Web MIDI");
+      return false;
+    }
+    try {
+      this.access = await navigator.requestMIDIAccess({ sysex: true });
+    } catch (e) {
+      Log.info("MIDI access denied: " + e.message);
+      UI.setConnState("bad", "Denied");
+      return false;
+    }
+    this.access.onstatechange = () => this.populatePorts();
+    this.populatePorts();
+    return true;
+  },
+
+  channel() { return (parseInt(document.getElementById("midiCh").value, 10) || 1) - 1; },
+
+  populatePorts() {
+    const outSel = document.getElementById("midiOut");
+    const inSel = document.getElementById("midiIn");
+    const savedOut = localStorage.getItem("pcm70.out");
+    const savedIn = localStorage.getItem("pcm70.in");
+    const fill = (sel, ports, saved) => {
+      const prev = sel.value;
+      sel.innerHTML = "";
+      const none = document.createElement("option");
+      none.value = ""; none.textContent = "— none —";
+      sel.appendChild(none);
+      let first = null;
+      for (const port of ports.values()) {
+        const o = document.createElement("option");
+        o.value = port.id; o.textContent = port.name;
+        sel.appendChild(o);
+        if (first === null) first = port.id;
+      }
+      const want = [saved, prev, first].find(id => id && [...ports.values()].some(p => p.id === id));
+      sel.value = want || "";
+    };
+    fill(outSel, this.access.outputs, savedOut);
+    fill(inSel, this.access.inputs, savedIn);
+    this._bindPort();
+  },
+
+  _bindPort() {
+    const outId = document.getElementById("midiOut").value;
+    const inId = document.getElementById("midiIn").value;
+    this.out = outId ? this.access.outputs.get(outId) : null;
+    if (this.in) this.in.onmidimessage = null;
+    this.in = inId ? this.access.inputs.get(inId) : null;
+    if (this.in) this.in.onmidimessage = (e) => this._onMessage(e);
+    const both = this.out && this.in;
+    UI.setConnState(both ? "ok" : (this.out || this.in) ? "warn" : "bad",
+      both ? "Connected" : this.out ? "Out only" : this.in ? "In only" : "No ports");
+    UI.updateTransferButtons();
+  },
+
+  selectPorts() {
+    localStorage.setItem("pcm70.out", document.getElementById("midiOut").value);
+    localStorage.setItem("pcm70.in", document.getElementById("midiIn").value);
+    this._bindPort();
+  },
+
+  // ---- outbound: paced queue with per-key trailing coalescing -----------
+  enqueue(bytes, { coalesceKey } = {}) {
+    if (coalesceKey && this._coalesced.has(coalesceKey)) {
+      this._queue[this._coalesced.get(coalesceKey)].bytes = bytes; // replace latest
+    } else {
+      const idx = this._queue.push({ bytes, coalesceKey }) - 1;
+      if (coalesceKey) this._coalesced.set(coalesceKey, idx);
+    }
+    this._pump();
+  },
+
+  _pump() {
+    if (this._pumpTimer) return;
+    const step = () => {
+      const item = this._queue.shift();
+      if (!item) { this._pumpTimer = null; return; }
+      if (item.coalesceKey) this._coalesced.delete(item.coalesceKey);
+      // indices shifted by one; rebuild coalesce map lazily
+      this._reindex();
+      this._rawSend(item.bytes);
+      this._pumpTimer = setTimeout(step, SEND_INTERVAL_MS);
+    };
+    step();
+  },
+
+  _reindex() {
+    this._coalesced.clear();
+    this._queue.forEach((it, i) => { if (it.coalesceKey) this._coalesced.set(it.coalesceKey, i); });
+  },
+
+  _rawSend(bytes) {
+    if (!this.out) { Log.info("No MIDI out — send dropped."); return; }
+    try { this.out.send(bytes); Log.tx(bytes); }
+    catch (e) { Log.info("send failed: " + e.message); }
+  },
+
+  // Bypass the queue for a single immediate message (requests).
+  sendNow(bytes) { this._rawSend(bytes); },
+
+  // ---- inbound ----------------------------------------------------------
+  _onMessage(e) {
+    const bytes = e.data;
+    if (bytes[0] !== 0xf0) return; // only sysex concerns us
+    const parsed = Sysex.parse(bytes);
+    Log.rx(bytes, parsed);
+    if (this._pending && parsed && this._pending.match(parsed)) {
+      const p = this._pending; this._pending = null;
+      clearTimeout(p.timer); p.resolve(parsed);
+    } else if (parsed && parsed.kind === "bulk" && typeof this.onBulk === "function") {
+      this.onBulk(parsed); // unsolicited dump (e.g. front-panel "Send Registers")
+    }
+  },
+
+  // Send a request, resolve with the first parsed reply that matches.
+  request(bytes, { match, timeoutMs = 1500, retries = 1 } = {}) {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      const attempt = () => {
+        attempts++;
+        this._pending = {
+          match,
+          resolve,
+          reject,
+          timer: setTimeout(() => {
+            this._pending = null;
+            if (attempts <= retries) attempt();
+            else reject(new Error("MIDI request timed out"));
+          }, timeoutMs),
+        };
+        this.sendNow(bytes);
+      };
+      attempt();
+    });
+  },
+};
+
+/* ---- 5. Store --------------------------------------------------------- */
+// workingCopy + dirty + origin; setParam/setPatch/setName/replaceProgram. M3.
+const Store = {};
+
+/* ---- 6. UI ------------------------------------------------------------ */
+const UI = {
+  // Minimal M0 bootstrap: theme toggle + auto-send toggle wiring so the shell
+  // is interactive. Full render path arrives in M3.
+  initTheme() {
+    const KEY = "pcm70.theme";
+    const btn = document.getElementById("btnTheme");
+    const apply = (t) => {
+      if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      else delete document.documentElement.dataset.theme;
+    };
+    let cur = localStorage.getItem(KEY) || "system";
+    apply(cur);
+    btn.addEventListener("click", () => {
+      cur = cur === "system" ? "light" : cur === "light" ? "dark" : "system";
+      localStorage.setItem(KEY, cur);
+      apply(cur);
+      btn.title = "Theme: " + cur;
+    });
+  },
+  initToggles() {
+    const t = document.getElementById("autoSend");
+    const set = (on) => { t.classList.toggle("on", on); t.setAttribute("aria-checked", String(on)); };
+    set(localStorage.getItem("pcm70.autoSend") !== "0");
+    const flip = () => {
+      const on = !t.classList.contains("on");
+      set(on);
+      localStorage.setItem("pcm70.autoSend", on ? "1" : "0");
+    };
+    t.addEventListener("click", flip);
+    t.addEventListener("keydown", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); flip(); } });
+  },
+  initChannelSelect() {
+    const sel = document.getElementById("midiCh");
+    for (let i = 1; i <= 16; i++) {
+      const o = document.createElement("option");
+      o.value = String(i); o.textContent = String(i);
+      sel.appendChild(o);
+    }
+    sel.value = localStorage.getItem("pcm70.channel") || "1";
+    sel.addEventListener("change", () => localStorage.setItem("pcm70.channel", sel.value));
+  },
+
+  setConnState(kind, text) {
+    // kind: "ok" (green) | "warn" (partial, red) | "bad" (red) | "" (neutral)
+    const led = document.getElementById("connLed");
+    led.classList.remove("ok", "bad");
+    if (kind === "ok") led.classList.add("ok");
+    else if (kind === "warn" || kind === "bad") led.classList.add("bad");
+    document.getElementById("connTxt").textContent = text;
+  },
+
+  updateTransferButtons() {
+    const canOut = !!Midi.out;
+    const canIn = !!Midi.in;
+    document.getElementById("btnGet").disabled = !(canOut && canIn);
+    document.getElementById("btnPut").disabled = !canOut;
+  },
+
+  initMidi() {
+    document.getElementById("midiOut").addEventListener("change", () => Midi.selectPorts());
+    document.getElementById("midiIn").addEventListener("change", () => Midi.selectPorts());
+    // Retry connect by clicking the status LED (in case the first attempt was
+    // before a user gesture / device plugged in later).
+    document.getElementById("connLed").parentElement.style.cursor = "pointer";
+    document.getElementById("connLed").parentElement.addEventListener("click", () => Midi.connect());
+    Midi.connect();
+  },
+
+  // M1: Get requests the active dump and logs the decoded result. Store/render
+  // wiring (replaceProgram) arrives in M3; Put/Store in M4.
+  initTransfer() {
+    document.getElementById("btnGet").addEventListener("click", async () => {
+      if (!Midi.out || !Midi.in) return;
+      const ch = Midi.channel();
+      const req = Sysex.buildDumpRequest(ch, { stored: false, reg: 50 });
+      Log.info("Get: requesting active dump…");
+      try {
+        const reply = await Midi.request(req, {
+          match: (p) => p.kind === "bulk" && !p.stored,
+          timeoutMs: 1500, retries: 1,
+        });
+        if (!reply.checksumOk) Log.info("⚠ dump checksum mismatch — see RX line.");
+        else Log.info(`Got active dump (${DATA.PROGRAM_TYPES[reply.data167[0]]?.name || "unknown type"}). Store/render wiring lands in M3.`);
+      } catch (e) {
+        Log.info("Get failed: " + e.message);
+      }
+    });
+    document.getElementById("btnPut").addEventListener("click", () => {
+      Log.info("Put: needs a loaded program (Store/encode wiring lands in M3–M4).");
+    });
+    this.updateTransferButtons(); // reflect offline state on load
+  },
+};
+
+/* ---- 7. Librarian ----------------------------------------------------- */
+const Librarian = {};
+
+/* ---- 8. Log ----------------------------------------------------------- */
+// Ring buffer of decoded TX/RX lines rendered into the console strip.
+const Log = {
+  MAX: 200,
+  _lines: [],
+  _el: null,
+
+  init() { this._el = document.getElementById("console"); this._render(); },
+
+  _hex(bytes, cap = 16) {
+    const arr = Array.from(bytes);
+    const shown = arr.slice(0, cap).map(b => b.toString(16).padStart(2, "0").toUpperCase()).join(" ");
+    return arr.length > cap ? `${shown} … (${arr.length} bytes)` : shown;
+  },
+
+  _decode(parsed) {
+    if (!parsed) return "unrecognized";
+    switch (parsed.kind) {
+      case "bulk": {
+        const t = DATA.PROGRAM_TYPES[parsed.data167 ? parsed.data167[0] : -1];
+        const where = parsed.stored ? `stored reg ${parsed.reg}` : "active";
+        const csum = parsed.checksumOk ? "checksum OK" : `checksum BAD (got ${parsed.gotChecksum}, want ${parsed.wantChecksum})`;
+        return `bulk ${where} · ${t ? t.name : "type ?"} · ${csum}`;
+      }
+      case "param": return `param ${parsed.paramNum} = ${parsed.raw}`;
+      case "request": return `request ${parsed.event === 0x61 ? "stored" : "active"} reg ${parsed.reg}`;
+      default: return parsed.kind;
+    }
+  },
+
+  tx(bytes, note) { this._push("TX", this._hex(bytes), note || this._decode(Sysex.parse(bytes))); },
+  rx(bytes, parsed) { this._push("RX", this._hex(bytes), this._decode(parsed)); },
+  info(text) { this._push("··", "", text); },
+
+  _push(dir, hex, note) {
+    this._lines.push({ dir, hex, note });
+    if (this._lines.length > this.MAX) this._lines.shift();
+    this._render();
+  },
+
+  _render() {
+    if (!this._el) return;
+    this._el.innerHTML = "";
+    const recent = this._lines.slice(-40);
+    if (recent.length === 0) {
+      const d = document.createElement("div");
+      d.className = "line"; d.innerHTML = '<span class="dim">Console ready — TX/RX will appear here.</span>';
+      this._el.appendChild(d);
+      return;
+    }
+    for (const l of recent) {
+      const div = document.createElement("div");
+      div.className = "line";
+      const dir = document.createElement("span"); dir.className = "dir"; dir.textContent = l.dir;
+      const hex = document.createElement("span"); hex.textContent = l.hex;
+      const note = document.createElement("span"); note.className = "dim"; note.textContent = l.note ? "· " + l.note : "";
+      div.append(dir, hex, note);
+      this._el.appendChild(div);
+    }
+    this._el.scrollTop = this._el.scrollHeight;
+  },
+};
+
+// Exposed for the console / debugging (and test.html). Not part of the render path.
+window.APP = { Midi, Store, UI, Librarian, Log, Sysex, Codec, Convert, DATA };
+
+/* ---- boot ------------------------------------------------------------- */
+window.addEventListener("DOMContentLoaded", () => {
+  Log.init();
+  UI.initTheme();
+  UI.initToggles();
+  UI.initChannelSelect();
+  UI.initMidi();
+  UI.initTransfer();
+  // M2: data tables. M3: Store + render path + widgets.
+});
+</script>
+</body>
+</html>

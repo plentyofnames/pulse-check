@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PCM 70 Core — round-trip tests</title>
+<style>
+  body { font: 13px/1.5 ui-monospace, Menlo, monospace; margin: 24px; background: #0b0e0c; color: #cfe; }
+  h1 { font-size: 16px; }
+  .pass { color: #46f0c6; }
+  .fail { color: #ff6b5a; font-weight: 700; }
+  .grp { margin: 14px 0 4px; color: #8ad; border-bottom: 1px solid #234; }
+  #summary { font-size: 15px; margin: 18px 0; }
+  pre { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>PCM 70 Core — round-trip tests</h1>
+<div id="summary">running…</div>
+<pre id="out"></pre>
+
+<script src="pcm70-data.js"></script>
+<script src="pcm70-core.js"></script>
+<script>
+"use strict";
+const { Sysex, Codec } = window.PCM70CORE;
+const out = document.getElementById("out");
+let passed = 0, failed = 0;
+
+function log(msg, ok) {
+  const span = document.createElement("span");
+  span.className = ok ? "pass" : "fail";
+  span.textContent = (ok ? "  PASS  " : "  FAIL  ") + msg + "\n";
+  out.appendChild(span);
+  if (ok) passed++; else failed++;
+}
+function group(name) {
+  const d = document.createElement("div");
+  d.className = "grp";
+  d.textContent = name;
+  out.appendChild(d);
+}
+function eqBytes(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if ((a[i] & 0xff) !== (b[i] & 0xff)) return false;
+  return true;
+}
+// deterministic pseudo-random (no Math.random needed / reproducible)
+function prng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+
+/* ---- 1. nybblize / denybblize lossless over all byte values ---------- */
+group("nybblize ↔ denybblize");
+{
+  const rnd = prng(1);
+  let ok = true;
+  for (let t = 0; t < 200; t++) {
+    const data = new Uint8Array(167);
+    for (let i = 0; i < 167; i++) data[i] = Math.floor(rnd() * 256);
+    const back = Sysex.denybblize(Sysex.nybblize(data));
+    if (!eqBytes(data, back)) { ok = false; break; }
+  }
+  log("200 random 167-byte payloads survive nybblize→denybblize", ok);
+
+  // exhaustive single-byte check
+  let allBytes = true;
+  for (let v = 0; v < 256; v++) {
+    const d = new Uint8Array(167); d[0] = v;
+    if (Sysex.denybblize(Sysex.nybblize(d))[0] !== v) { allBytes = false; break; }
+  }
+  log("all 256 byte values 0x00–0xFF round-trip exactly", allBytes);
+}
+
+/* ---- 2. bulk data build → parse framing round-trip ------------------- */
+group("Sysex.buildBulkData ↔ Sysex.parse");
+{
+  const rnd = prng(7);
+  let ok = true, csumOk = true, metaOk = true;
+  for (let t = 0; t < 100; t++) {
+    const data = new Uint8Array(167);
+    for (let i = 0; i < 167; i++) data[i] = Math.floor(rnd() * 256);
+    const ch = t % 16;
+    const stored = (t % 2) === 1;
+    const reg = t % 50;
+    const msg = Sysex.buildBulkData(ch, { stored, reg, data167: data });
+    if (msg[0] !== 0xf0 || msg[msg.length - 1] !== 0xf7) { ok = false; break; }
+    const p = Sysex.parse(msg);
+    if (!p || p.kind !== "bulk") { ok = false; break; }
+    if (!p.checksumOk) csumOk = false;
+    if (p.stored !== stored || p.reg !== reg || p.ch !== ch) metaOk = false;
+    if (!eqBytes(p.data167, data)) { ok = false; break; }
+  }
+  log("100 bulk messages: data167 recovered byte-for-byte", ok);
+  log("checksum verifies on every self-built message", csumOk);
+  log("stored/reg/channel decoded correctly", metaOk);
+
+  // corrupt a nybble → checksum must fail
+  const data = new Uint8Array(167); data[5] = 0x42;
+  const msg = Sysex.buildBulkData(3, { stored: true, reg: 9, data167: data });
+  msg[10] ^= 0x01; // flip a nybble
+  const bad = Sysex.parse(msg);
+  log("corrupted payload → checksumOk === false", bad && bad.checksumOk === false);
+}
+
+/* ---- 3. param change build → parse ----------------------------------- */
+group("Sysex.buildParamChange ↔ Sysex.parse");
+{
+  let ok = true;
+  for (let raw = 0; raw <= 1023; raw += 7) {
+    for (const pn of [0, 40, 59, 89]) {
+      const ch = raw % 16;
+      const msg = Sysex.buildParamChange(ch, pn, raw);
+      const p = Sysex.parse(msg);
+      if (!p || p.kind !== "param" || p.raw !== raw || p.paramNum !== pn || p.ch !== ch) { ok = false; break; }
+    }
+    if (!ok) break;
+  }
+  log("param change round-trips raw 0–1023 for params {0,40,59,89}", ok);
+
+  // spot-check byte layout for a known value
+  const m = Sysex.buildParamChange(0, 11, 0x2ab); // 683 = 0b1010101011
+  const layoutOk = m[3] === 0x20 && m[4] === 11 && m[5] === ((0x2ab >> 7) & 7) && m[6] === (0x2ab & 0x7f);
+  log("param byte layout matches manual (0x20|ch, g, hi3, lo7)", layoutOk);
+}
+
+/* ---- 4. dump request layout ------------------------------------------ */
+group("Sysex.buildDumpRequest");
+{
+  const a = Sysex.buildDumpRequest(2, { stored: false, reg: 50 });
+  const s = Sysex.buildDumpRequest(2, { stored: true, reg: 17 });
+  log("active request = F0 06 00 32 60 32 F7",
+    eqBytes(a, [0xf0, 0x06, 0x00, 0x32, 0x60, 0x32, 0xf7]));
+  log("stored request = F0 06 00 32 61 11 F7",
+    eqBytes(s, [0xf0, 0x06, 0x00, 0x32, 0x61, 0x11, 0xf7]));
+  const rt = Sysex.parse(s);
+  log("request parses back (event 0x61, reg 17)", rt && rt.kind === "request" && rt.event === 0x61 && rt.reg === 17);
+}
+
+/* ---- 5. scale factor signed bijection -------------------------------- */
+group("Codec scale factor raw ↔ signed");
+{
+  let ok = true;
+  const seen = new Set();
+  for (let raw = 0; raw < 256; raw++) {
+    const s = Codec.scaleToSigned(raw);
+    if (s === 0 || s < -128 || s > 128) { ok = false; break; }
+    if (Codec.scaleFromSigned(s) !== raw) { ok = false; break; }
+    seen.add(s);
+  }
+  log("all 256 raw values map to distinct signed −128…+128 (no 0) and back", ok && seen.size === 256);
+}
+
+/* ---- 6. semantic codec round-trip (Program ⇄ 167 bytes) -------------- */
+group("Codec.encodeProgram ↔ Codec.decodeProgram");
+{
+  const rnd = prng(99);
+  let ok = true, detail = "";
+  for (let t = 0; t < 50; t++) {
+    const words = new Uint16Array(60);
+    for (let i = 0; i < 60; i++) words[i] = Math.floor(rnd() * 1024);
+    const patches = [];
+    for (let i = 0; i < 10; i++) {
+      patches.push({
+        src: Math.floor(rnd() * 71),
+        dest: Math.floor(rnd() * 60),
+        scale: Codec.scaleToSigned(Math.floor(rnd() * 256)),
+      });
+    }
+    const prog = {
+      type: 4 + (t % 11),
+      matrixPos: { row: t % 5, col: t % 10 },
+      name: "TEST PROG " + (t % 10),   // ≤13 chars
+      patches, words,
+    };
+    const data = Codec.encodeProgram(prog);
+    if (data.length !== 167) { ok = false; detail = "length"; break; }
+    if (data[16] !== 0) { ok = false; detail = "name terminator (byte16 nonzero)"; break; }
+    const back = Codec.decodeProgram(data);
+    if (back.type !== prog.type) { ok = false; detail = "type"; break; }
+    if (back.matrixPos.row !== prog.matrixPos.row || back.matrixPos.col !== prog.matrixPos.col) { ok = false; detail = "matrixPos"; break; }
+    if (back.name !== prog.name) { ok = false; detail = `name '${back.name}' != '${prog.name}'`; break; }
+    for (let i = 0; i < 60; i++) if (back.words[i] !== prog.words[i]) { ok = false; detail = "word " + i; break; }
+    if (!ok) break;
+    for (let i = 0; i < 10; i++) {
+      const a = back.patches[i], b = prog.patches[i];
+      if (a.src !== b.src || a.dest !== b.dest || a.scale !== b.scale) { ok = false; detail = "patch " + i; break; }
+    }
+    if (!ok) break;
+  }
+  log("50 random programs survive encode→decode" + (detail ? " ("+detail+")" : ""), ok);
+
+  // full data167 → decode → encode → data167 identity (valid, null-terminated name)
+  const rnd2 = prng(555);
+  let idOk = true;
+  for (let t = 0; t < 50; t++) {
+    const data = new Uint8Array(167);
+    data[0] = 4 + (t % 11);
+    data[1] = t % 5; data[2] = t % 10;
+    const nm = "REG" + t;
+    for (let i = 0; i < 13; i++) data[3 + i] = i < nm.length ? nm.charCodeAt(i) : 0;
+    data[16] = 0;
+    for (let i = 17; i < 47; i++) data[i] = Math.floor(rnd2() * 256);
+    for (let i = 47; i < 167; i++) data[i] = Math.floor(rnd2() * 256);
+    // clamp high-nybble word bytes to 2 bits so they survive the 10-bit model
+    for (let i = 0; i < 60; i++) data[47 + i * 2 + 1] &= 0x03;
+    const back = Codec.encodeProgram(Codec.decodeProgram(data));
+    if (!eqBytes(back, data)) { idOk = false; break; }
+  }
+  log("data167 → decode → encode reproduces original bytes", idOk);
+}
+
+/* ---- summary --------------------------------------------------------- */
+const sum = document.getElementById("summary");
+sum.textContent = `${passed} passed, ${failed} failed`;
+sum.className = failed ? "fail" : "pass";
+console.log(`[TESTS] ${passed} passed, ${failed} failed`);
+</script>
+</body>
+</html>

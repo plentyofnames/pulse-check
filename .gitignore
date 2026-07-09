@@ -1,0 +1,6 @@
+# Copyrighted documentation — never publish
+*.pdf
+
+# Local tooling / session data
+.claude/
+.DS_Store
