@@ -230,11 +230,175 @@
     },
   };
 
-  /* ---- Convert: raw ⇄ display math (filled in M2) ---------------------- */
+  /* ---- Convert: raw ⇄ display math (manual 6-13…6-15) ------------------ *
+   * ctx = { type, sizeRaw } — program type (4–14) and the current raw value of
+   * the SIZE/DURATION param (for size-dependent formulas & clamps). Tables are
+   * read lazily from root.PCM70 so this stays pure and load-order tolerant.    */
+
+  // Pitch note names Db1 … Eb7 (75 semitones), flats, octave rolls over at C.
+  const PITCH_NAMES = (() => {
+    const PC = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+    const out = [];
+    for (let i = 0; i < 75; i++) { const abs = 13 + i; out.push(PC[abs % 12] + Math.floor(abs / 12)); }
+    return out; // index 0 = Db1, index 74 = Eb7
+  })();
+
   const Convert = {
-    // limitsFor(meta, ctx) -> { rawMin, rawMax }
-    // toDisplay(meta, raw, ctx) -> { text, outOfRange }
-    // fromDisplay(meta, text, ctx) -> raw
+    PITCH_NAMES,
+
+    // --- size-context helpers (reverb programs only) ---
+    _sp(type) { return (root.PCM70.PROGRAM_TYPES[type] || {}).sizeParams || null; },
+    _isBpm(type) { return !!(root.PCM70.PROGRAM_TYPES[type] || {}).bpm; },
+    _sizeValue(ctx) { const sp = this._sp(ctx.type); return sp ? (ctx.sizeRaw - sp.sizeRawMin) : null; },
+    _sizeFactor(ctx) { const sp = this._sp(ctx.type); return Math.round((this._sizeValue(ctx) * 10) / sp.minSize) + 10; },
+    _samples(ctx) { const sp = this._sp(ctx.type); return Math.max(0, sp.sizeBase - this._sizeFactor(ctx) * sp.sizeConst); },
+    _predelayRange(ctx) { return Math.max(0, Math.min(254, Math.floor(this._samples(ctx) / 68) - 1)); },
+    _reflDelayX(ctx) {
+      const T = root.PCM70.DELAY_SAMPLES, s = this._samples(ctx);
+      for (let i = 0; i < T.length; i++) if (T[i] >= s) return i;
+      return T.length - 1;
+    },
+
+    limitsFor(meta, ctx) {
+      let rawMin = meta.rawMin, rawMax = meta.rawMax;
+      if (this._isBpm(ctx.type) && meta.bpm) { rawMin = meta.bpm.rawMin; rawMax = meta.bpm.rawMax; }
+      const sp = this._sp(ctx.type);
+      if (meta.kind === "size" && sp) { rawMin = sp.sizeRawMin; rawMax = sp.sizeRawMax; }
+      if (sp && ctx.sizeRaw != null) {
+        if (meta.kind === "predelay") rawMax = rawMin + this._predelayRange(ctx) - 1;
+        else if (meta.kind === "delay") rawMax = rawMin + this._reflDelayX(ctx) - 2;
+      }
+      return { rawMin, rawMax };
+    },
+
+    // Piecewise delay-time display (ms) for a delay "value" = raw - rawMin.
+    _delayMs(value) {
+      const T = root.PCM70.DELAY_SAMPLES;
+      if (value <= 97) return T[value] * 148 / 5000;
+      if (value <= 147) return value - 48;
+      if (value <= 197) return (value - 98) * 2;
+      if (value <= 247) return (value - 148) * 4;
+      return (value - 198) * 8;
+    },
+
+    // Truncate to 3 significant figures (matches the manual's displayed values).
+    _sig3(x) {
+      if (x === 0) return 0;
+      const neg = x < 0; x = Math.abs(x);
+      const mag = Math.floor(Math.log10(x));
+      const f = Math.pow(10, 2 - mag);
+      let v = Math.floor(x * f) / f;
+      return neg ? -v : v;
+    },
+
+    _lin(meta, raw, limits) {
+      const span = meta.rawMax - meta.rawMin;
+      const t = span ? (raw - meta.rawMin) / span : 0;
+      return meta.dispMin + t * (meta.dispMax - meta.dispMin);
+    },
+
+    _fmtFreq(hz) {
+      if (hz >= 1000) return (hz / 1000).toFixed(2).replace(/0$/, "") + " kHz";
+      return hz + " Hz";
+    },
+
+    // toDisplay -> { text, num, outOfRange }. num is the numeric display value
+    // (null for pure enums), used by fromDisplay's nearest-match.
+    toDisplay(meta, raw, ctx) {
+      const limits = this.limitsFor(meta, ctx);
+      const oor = raw < limits.rawMin || raw > limits.rawMax;
+      const wrap = (text, num) => ({ text, num: num == null ? null : num, outOfRange: oor });
+      const val = raw - meta.rawMin; // "value" used by most manual formulas
+      const D = root.PCM70;
+
+      switch (meta.kind) {
+        case "mix": {
+          const pct = Math.round(val * 100 / (meta.rawMax - meta.rawMin));
+          return wrap(pct + "%", pct);
+        }
+        case "softknob": return wrap(String(val), val);
+        case "plain":    return wrap(String(val), val);
+        case "onoff":    return wrap(raw >= meta.rawMax ? "ON" : "OFF", null);
+
+        case "fxdb": case "linear": case "signed": case "pct": {
+          const n = this._sig3(this._lin(meta, raw, limits));
+          const sign = (meta.dispMin < 0 && n > 0) ? "+" : "";
+          return wrap(sign + n + (meta.unit ? " " + meta.unit : ""), n);
+        }
+        case "pan": case "panR": {
+          const n = Math.round(this._lin(meta, raw, limits)); // -50..+50
+          const L = meta.kind === "panR" ? n > 0 : n < 0;
+          const txt = n === 0 ? "CTR" : Math.abs(n) + (L ? "L" : "R");
+          return wrap(txt, n);
+        }
+        case "level": {
+          const lv = D.LEVELS[val];
+          if (lv === "OFF" || lv === "FULL") return wrap(lv, null);
+          return wrap(lv + " dB", typeof lv === "number" ? lv : null);
+        }
+        case "freq": {
+          const hz = D.FREQUENCIES[val];
+          return wrap(this._fmtFreq(hz), hz);
+        }
+        case "size": {
+          const sp = this._sp(ctx.type);
+          const sv = raw - limits.rawMin;
+          const m = Math.trunc((sv + sp.minSize) * 71 / 100 * 10) / 10; // 1-decimal, truncated
+          return wrap(m + " m", m);
+        }
+        case "rtime": {
+          const sp = this._sp(ctx.type);
+          const timeFactor = Math.round(this._sizeFactor(ctx) * sp.timeConst / 1000);
+          const t = timeFactor * D.REVERB_TIMES[val] / 500; // seconds
+          const s = this._sig3(t);
+          return wrap(s + " s", s);
+        }
+        case "revtime": return wrap(val >= (meta.rawMax - meta.rawMin) ? "INF" : this._sig3(val * 0.04 + 0.04) + " s", null);
+        case "gate": {
+          if (raw >= meta.rawMax) return wrap("OFF", null);
+          const ms = val * 18;
+          return ms >= 1000 ? wrap(this._sig3(ms / 1000) + " s", ms) : wrap(ms + " ms", ms);
+        }
+        case "predelay": {
+          const ms = val * 2;
+          return wrap(ms + " ms", ms);
+        }
+        case "delay": {
+          const ms = this._sig3(this._delayMs(val));
+          return wrap(ms + " ms", ms);
+        }
+        case "delaylin": {
+          const ms = Math.round(this._lin(meta, raw, limits));
+          return wrap(ms + " ms", ms);
+        }
+        case "chorusMode": {
+          if (val === 0) return wrap("OFF", null);
+          return wrap(val <= 6 ? `${val}VC S` : `${val - 6}VC T`, null);
+        }
+        case "pitch": return wrap(PITCH_NAMES[val] || "?", null);
+        default: return wrap(String(raw), raw);
+      }
+    },
+
+    // Nearest legal raw for a typed display string. Exact text match wins for
+    // enums; otherwise nearest numeric display value, clamped to current limits.
+    fromDisplay(meta, text, ctx) {
+      const limits = this.limitsFor(meta, ctx);
+      const clean = String(text).trim();
+      const target = parseFloat(clean.replace(/,/g, "").replace(/[^0-9.\-]/g, ""));
+      const hasNum = isFinite(target);
+      let best = limits.rawMin, bestErr = Infinity, exact = null;
+      for (let raw = meta.rawMin; raw <= meta.rawMax; raw++) {
+        const d = this.toDisplay(meta, raw, ctx);
+        if (d.text.toUpperCase() === clean.toUpperCase()) { exact = raw; break; }
+        if (hasNum && d.num != null) {
+          const e = Math.abs(d.num - target);
+          if (e < bestErr) { bestErr = e; best = raw; }
+        }
+      }
+      let raw = exact != null ? exact : best;
+      return Math.max(limits.rawMin, Math.min(limits.rawMax, raw));
+    },
   };
 
   root.PCM70CORE = { Sysex, Codec, Convert };

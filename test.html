@@ -18,11 +18,13 @@
 <div id="summary">running…</div>
 <pre id="out"></pre>
 
+<script src="pcm70-data-table14.js"></script>
 <script src="pcm70-data.js"></script>
 <script src="pcm70-core.js"></script>
 <script>
 "use strict";
-const { Sysex, Codec } = window.PCM70CORE;
+const { Sysex, Codec, Convert } = window.PCM70CORE;
+const DATA = window.PCM70;
 const out = document.getElementById("out");
 let passed = 0, failed = 0;
 
@@ -205,6 +207,146 @@ group("Codec.encodeProgram ↔ Codec.decodeProgram");
     if (!eqBytes(back, data)) { idOk = false; break; }
   }
   log("data167 → decode → encode reproduces original bytes", idOk);
+}
+
+/* ---- 7. data-model integrity (M2) ------------------------------------ */
+group("pcm70-data.js — table sizes & layout integrity");
+{
+  log("Table 11 (reverb times) has 32 entries", DATA.REVERB_TIMES.length === 32);
+  log("Table 12 (levels) has 36 entries, OFF..FULL", DATA.LEVELS.length === 36 && DATA.LEVELS[0] === "OFF" && DATA.LEVELS[35] === "FULL");
+  log("Table 13 (frequencies) has 32 entries", DATA.FREQUENCIES.length === 32);
+  log("Table 14 (delay samples) has 316 entries", DATA.DELAY_SAMPLES.length === 316);
+  log("Patch sources: 71 entries, 0=OFF, 1=Ctrl 0, 33=Switch 64, 65=Pitch Wheel, 70=MIDI Clock",
+    DATA.PATCH_SOURCES.length === 71 && DATA.PATCH_SOURCES[0] === "OFF" && DATA.PATCH_SOURCES[1] === "Ctrl 0" &&
+    DATA.PATCH_SOURCES[33] === "Switch 64" && DATA.PATCH_SOURCES[65] === "Pitch Wheel" && DATA.PATCH_SOURCES[70] === "MIDI Clock");
+
+  let layoutOk = true, detail = "";
+  for (const name of Object.keys(DATA.LAYOUTS)) {
+    const words = new Set(), params = new Set();
+    for (const g of DATA.LAYOUTS[name]) {
+      for (const e of g.params) {
+        if (e.byte < 47 || e.byte > 165 || (e.byte - 47) % 2 !== 0) { layoutOk = false; detail = `${name}.${e.name} bad byte ${e.byte}`; }
+        if (e.word < 0 || e.word > 59 || e.word !== (e.byte - 47) / 2) { layoutOk = false; detail = `${name}.${e.name} bad word`; }
+        if (e.paramNum !== e.row * 10 + e.col) { layoutOk = false; detail = `${name}.${e.name} paramNum`; }
+        if (words.has(e.word)) { layoutOk = false; detail = `${name} dup word ${e.word}`; }
+        if (params.has(e.paramNum)) { layoutOk = false; detail = `${name} dup param ${e.paramNum}`; }
+        words.add(e.word); params.add(e.paramNum);
+        if (!Convert.toDisplay) { layoutOk = false; }
+      }
+    }
+  }
+  log("all 7 layouts: bytes even & in range, unique word & paramNum, word=(byte-47)/2" + (detail ? " (" + detail + ")" : ""), layoutOk);
+}
+
+/* ---- 8. Convert display formulas (M2) -------------------------------- */
+group("Convert.toDisplay — anchored to manual display columns");
+{
+  const meta = (layout, name) => {
+    for (const g of DATA.LAYOUTS[layout]) for (const e of g.params) if (e.name === name) return e;
+    throw new Error("no meta " + layout + " " + name);
+  };
+  const ch = { type: 7, sizeRaw: 488 }; // Concert Hall, min size
+  const disp = (m, raw, c) => Convert.toDisplay(m, raw, c || ch).text;
+
+  // MIX 0/100%
+  const mix = meta("concertHall", "MIX");
+  log("MIX raw462 → 0%, raw562 → 100%", disp(mix, 462) === "0%" && disp(mix, 562) === "100%");
+
+  // SIZE 3.5 – 38.3 m (manual Table 7)
+  const size = meta("concertHall", "SIZE");
+  log("SIZE raw488 → 3.5 m, raw537 → 38.3 m", disp(size, 488) === "3.5 m" && disp(size, 537, { type: 7, sizeRaw: 537 }) === "38.3 m");
+
+  // LEVEL OFF..FULL (Table 12)
+  const lvl = meta("concertHall", "REFL L1"); // row 3 (level), param 31
+  log("REFL L1 (level) raw495 → OFF, raw530 → FULL, raw518 → -6 dB",
+    disp(lvl, 495) === "OFF" && disp(lvl, 530) === "FULL" && disp(lvl, 518) === "-6 dB");
+
+  // GATE: raw639 → OFF, raw384 → 0 ms, raw385 → 18 ms
+  const gate = meta("concertHall", "GATE TIME");
+  log("GATE raw639 → OFF, raw384 → 0 ms, raw385 → 18 ms",
+    disp(gate, 639) === "OFF" && disp(gate, 384) === "0 ms" && disp(gate, 385) === "18 ms");
+
+  // PDELAY min: raw385 → 0 ms
+  const pd = meta("concertHall", "PDELAY");
+  log("PDELAY raw385 → 0 ms", disp(pd, 385) === "0 ms");
+
+  // CHORUS mode (Table 4 chorusEcho)
+  const cm = meta("chorusEcho", "CHORUS");
+  const cc = { type: 4, sizeRaw: null };
+  log("CHORUS raw506→OFF, 507→1VC S, 512→6VC S, 513→1VC T, 518→6VC T",
+    Convert.toDisplay(cm, 506, cc).text === "OFF" && Convert.toDisplay(cm, 507, cc).text === "1VC S" &&
+    Convert.toDisplay(cm, 512, cc).text === "6VC S" && Convert.toDisplay(cm, 513, cc).text === "1VC T" &&
+    Convert.toDisplay(cm, 518, cc).text === "6VC T");
+
+  // PITCH Db1 – Eb7 (Table 6)
+  const pit = meta("resonantChords", "V1 PITCH");
+  const rc = { type: 6, sizeRaw: null };
+  log("V1 PITCH raw475 → Db1, raw549 → Eb7",
+    Convert.toDisplay(pit, 475, rc).text === "Db1" && Convert.toDisplay(pit, 549, rc).text === "Eb7");
+}
+
+/* ---- 9. size-dependent clamps vs manual worked examples (6-14) -------- */
+group("Convert.limitsFor — size-dependent predelay & refl-delay clamps");
+{
+  const meta = (layout, name) => {
+    for (const g of DATA.LAYOUTS[layout]) for (const e of g.params) if (e.name === name) return e;
+    throw new Error("no meta");
+  };
+  const byParam = (layout, pn) => {
+    for (const g of DATA.LAYOUTS[layout]) for (const e of g.params) if (e.paramNum === pn) return e;
+    throw new Error("no param " + pn);
+  };
+  const pd = meta("concertHall", "PDELAY");
+  const refl = byParam("concertHall", 41); // row 4 REFL L1 (delay), NOT the row-3 level of the same name
+
+  // Example rows: Concert Hall sizeValue 0 (raw488) and 49 (raw537).
+  // sizeValue 0: samples 29722 → predelay max disp 506 ms, refl max disp 864 ms.
+  const c0 = { type: 7, sizeRaw: 488 };
+  const pdLim0 = Convert.limitsFor(pd, c0);
+  const reflLim0 = Convert.limitsFor(refl, c0);
+  log("size 0: PDELAY max → 506 ms", Convert.toDisplay(pd, pdLim0.rawMax, c0).text === "506 ms");
+  log("size 0: REFL L1 max → 864 ms", Convert.toDisplay(refl, reflLim0.rawMax, c0).text === "864 ms");
+
+  // sizeValue 49: samples 13650 → predelay max disp 396 ms, refl max disp 396 ms.
+  const c49 = { type: 7, sizeRaw: 537 };
+  const pdLim49 = Convert.limitsFor(pd, c49);
+  const reflLim49 = Convert.limitsFor(refl, c49);
+  log("size 49: PDELAY max → 396 ms", Convert.toDisplay(pd, pdLim49.rawMax, c49).text === "396 ms");
+  log("size 49: REFL L1 max → 396 ms", Convert.toDisplay(refl, reflLim49.rawMax, c49).text === "396 ms");
+
+  // out-of-range flag: a raw above the shrunk max is flagged
+  log("size 49: PDELAY raw638 flagged out-of-range", Convert.toDisplay(pd, 638, c49).outOfRange === true);
+}
+
+/* ---- 10. fromDisplay inverse round-trip ------------------------------ */
+group("Convert.fromDisplay ↔ toDisplay round-trip");
+{
+  const meta = (layout, name) => {
+    for (const g of DATA.LAYOUTS[layout]) for (const e of g.params) if (e.name === name) return e;
+    throw new Error("no meta");
+  };
+  const cases = [
+    ["concertHall", "MIX", { type: 7, sizeRaw: 488 }],
+    ["concertHall", "SIZE", { type: 7, sizeRaw: 488 }],
+    ["concertHall", "DIFFUSION", { type: 7, sizeRaw: 488 }],
+    ["concertHall", "REFL L1", { type: 7, sizeRaw: 488 }], // level
+    ["chorusEcho", "V1 DLY", { type: 4, sizeRaw: null }],  // delay
+    ["resonantChords", "V1 PITCH", { type: 6, sizeRaw: null }],
+  ];
+  let allOk = true, detail = "";
+  for (const [layout, name, ctx] of cases) {
+    const m = meta(layout, name);
+    const lim = Convert.limitsFor(m, ctx);
+    for (let raw = lim.rawMin; raw <= lim.rawMax; raw++) {
+      const d = Convert.toDisplay(m, raw, ctx);
+      const back = Convert.fromDisplay(m, d.text, ctx);
+      const dBack = Convert.toDisplay(m, back, ctx);
+      // display strings must match (raw may differ where two raws share a display)
+      if (dBack.text !== d.text) { allOk = false; detail = `${name} raw${raw} '${d.text}' → ${back} '${dBack.text}'`; break; }
+    }
+    if (!allOk) break;
+  }
+  log("typed display re-parses to the same display value across full ranges" + (detail ? " (" + detail + ")" : ""), allOk);
 }
 
 /* ---- summary --------------------------------------------------------- */
