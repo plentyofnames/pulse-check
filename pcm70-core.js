@@ -321,7 +321,7 @@
         case "onoff":    return wrap(raw >= meta.rawMax ? "ON" : "OFF", null);
 
         case "fxdb": case "linear": case "signed": case "pct": {
-          const n = this._sig3(this._lin(meta, raw, limits));
+          const n = Math.round(this._lin(meta, raw, limits)); // manual shows integer steps
           const sign = (meta.dispMin < 0 && n > 0) ? "+" : "";
           return wrap(sign + n + (meta.unit ? " " + meta.unit : ""), n);
         }

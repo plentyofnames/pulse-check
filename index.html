@@ -628,8 +628,65 @@ const Midi = {
 };
 
 /* ---- 5. Store --------------------------------------------------------- */
-// workingCopy + dirty + origin; setParam/setPatch/setName/replaceProgram. M3.
-const Store = {};
+// The working copy is the single source of truth for the UI. Every mutation
+// goes through a setter that flips `dirty` and fires one onChange → render.
+const Store = {
+  prog: null,                               // Program (see Codec)
+  dirty: false,
+  origin: { kind: "scratch", id: null },    // { register|preset|library|scratch, id }
+  _onChange: null,
+
+  onChange(fn) { this._onChange = fn; },
+  _emit(change) { if (this._onChange) this._onChange(change); },
+
+  typeInfo() { return DATA.PROGRAM_TYPES[this.prog.type]; },
+  layout() { return DATA.LAYOUTS[this.typeInfo().layout]; },
+  metas() { const o = []; for (const g of this.layout()) for (const e of g.params) o.push(e); return o; },
+  sizeMeta() { return this.metas().find(m => m.kind === "size") || null; },
+  ctx() { const sm = this.sizeMeta(); return { type: this.prog.type, sizeRaw: sm ? this.prog.words[sm.word] : null }; },
+
+  replaceProgram(prog, opts = {}) {
+    this.prog = prog;
+    this.origin = opts.origin || { kind: "scratch", id: null };
+    this.dirty = !!opts.dirty;
+    this._emit({ type: "program" });
+  },
+  setParam(meta, raw) {
+    this.prog.words[meta.word] = raw & 0x3ff;
+    this.dirty = true;
+    this._emit({ type: "param", meta, raw });
+  },
+  setPatch(i, patch) {
+    this.prog.patches[i] = patch;
+    this.dirty = true;
+    this._emit({ type: "patch", index: i });
+  },
+  setName(name) {
+    this.prog.name = String(name).toUpperCase().slice(0, 13);
+    this.dirty = true;
+    this._emit({ type: "name" });
+  },
+  setType(type) {                            // swap algorithm; words reinterpreted
+    this.prog.type = type;
+    this.dirty = true;
+    this._emit({ type: "program" });
+  },
+
+  // A neutral starting program (midpoint of every param's range).
+  makeDefault(type = 7) {
+    const words = new Uint16Array(60);
+    for (const g of DATA.LAYOUTS[DATA.PROGRAM_TYPES[type].layout]) {
+      for (const e of g.params) words[e.word] = Math.round((e.rawMin + e.rawMax) / 2);
+    }
+    return {
+      type,
+      matrixPos: { row: 0, col: 0 },
+      name: "INIT",
+      patches: Array.from({ length: 10 }, () => ({ src: 0, dest: 0, scale: -128 })),
+      words,
+    };
+  },
+};
 
 /* ---- 6. UI ------------------------------------------------------------ */
 const UI = {
@@ -713,16 +770,299 @@ const UI = {
           match: (p) => p.kind === "bulk" && !p.stored,
           timeoutMs: 1500, retries: 1,
         });
-        if (!reply.checksumOk) Log.info("⚠ dump checksum mismatch — see RX line.");
-        else Log.info(`Got active dump (${DATA.PROGRAM_TYPES[reply.data167[0]]?.name || "unknown type"}). Store/render wiring lands in M3.`);
+        if (!reply.checksumOk) { Log.info("⚠ dump checksum mismatch — not loaded (see RX line)."); return; }
+        if (this.applyDump(reply, { kind: "scratch", id: null }))
+          Log.info(`Loaded active dump: ${Store.typeInfo().name}.`);
       } catch (e) {
         Log.info("Get failed: " + e.message);
       }
     });
     document.getElementById("btnPut").addEventListener("click", () => {
-      Log.info("Put: needs a loaded program (Store/encode wiring lands in M3–M4).");
+      if (!Midi.out) { Log.info("Put: no MIDI out selected."); return; }
+      const data = Codec.encodeProgram(Store.prog);
+      Midi.enqueue(Sysex.buildBulkData(Midi.channel(), { stored: false, reg: 50, data167: data }));
+      Log.info("Put: sent working copy to active buffer.");
     });
     this.updateTransferButtons(); // reflect offline state on load
+  },
+
+  // Apply a parsed bulk dump into the working copy (confirm if dirty).
+  applyDump(parsed, origin) {
+    if (Store.dirty && !window.confirm("Discard unsaved edits and load this program?")) return false;
+    Store.replaceProgram(Codec.decodeProgram(parsed.data167), { origin, dirty: false });
+    return true;
+  },
+
+  /* ------- render path (single; { param } refresh vs full rebuild) ------- */
+  _el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  },
+
+  onStoreChange(change) {
+    switch (change.type) {
+      case "program": this.renderAll(); break;
+      case "param":   this.refreshCells(); break;
+      case "patch":   /* patch selects already reflect their own value */ break;
+      case "name":    break;
+    }
+    this.renderVfd();
+    document.getElementById("editedDot").classList.toggle("on", Store.dirty);
+    // Live send on edit (Auto-send ON) — hardware active buffer follows editor.
+    if (change.type === "param" && this._autoSend() && Midi.out) {
+      Midi.enqueue(Sysex.buildParamChange(Midi.channel(), change.meta.paramNum, change.raw),
+        { coalesceKey: "param:" + change.meta.paramNum });
+    }
+  },
+
+  _autoSend() { return document.getElementById("autoSend").classList.contains("on"); },
+
+  renderAll() {
+    this.renderProgramSelect();
+    this.renderProgHeader();
+    this.renderParams();
+    this.renderPatchBay();
+    this.renderVfd();
+    document.getElementById("editedDot").classList.toggle("on", Store.dirty);
+    this.updateTransferButtons();
+  },
+
+  renderVfd() {
+    if (!Store.prog) return;
+    const t = Store.typeInfo();
+    const o = Store.origin;
+    const where = o.kind === "register" ? String(o.id)
+      : o.kind === "preset" ? "P" + o.id
+      : o.kind === "library" ? "LIB" : "SCRATCH";
+    document.getElementById("vfdLine1").textContent = `${where}  ${Store.prog.name || ""}`;
+    document.getElementById("vfdLine2").textContent = `${t.name.toUpperCase()}${Store.dirty ? "  · EDITED" : ""}`;
+  },
+
+  renderProgramSelect() {
+    const sel = document.getElementById("progSel");
+    if (!sel._built) {
+      for (const id of Object.keys(DATA.PROGRAM_TYPES)) {
+        const o = this._el("option", null, `${id} · ${DATA.PROGRAM_TYPES[id].name}`);
+        o.value = id; sel.appendChild(o);
+      }
+      sel.addEventListener("change", () => Store.setType(parseInt(sel.value, 10)));
+      sel._built = true;
+    }
+    sel.value = String(Store.prog.type);
+  },
+
+  renderProgHeader() {
+    const nameEl = document.getElementById("progName");
+    if (!nameEl._wired) {
+      nameEl.addEventListener("input", () => Store.setName(nameEl.value));
+      nameEl._wired = true;
+    }
+    if (document.activeElement !== nameEl) nameEl.value = Store.prog.name || "";
+    const t = Store.typeInfo();
+    document.getElementById("algoChip").textContent = `${t.name} · type ${Store.prog.type}`;
+  },
+
+  renderParams() {
+    const host = document.getElementById("paramRows");
+    host.innerHTML = "";
+    this._cells = [];
+    const ctx = Store.ctx();
+    for (const g of Store.layout()) {
+      const grp = this._el("div", "rowgroup");
+      const h = this._el("h3");
+      h.innerHTML = `<span class="rn">Row ${g.row}</span> `;
+      h.appendChild(document.createTextNode(g.label));
+      grp.appendChild(h);
+      const grid = this._el("div", "pgrid");
+      for (const meta of g.params) grid.appendChild(this._makeParamCell(meta, ctx));
+      grp.appendChild(grid);
+      host.appendChild(grp);
+    }
+  },
+
+  _makeParamCell(meta) {
+    const cell = this._el("div", "param");
+    const top = this._el("div", "top");
+    top.appendChild(this._el("span", "lbl", meta.name));
+    const val = this._el("span", "val");
+    top.appendChild(val);
+    cell.appendChild(top);
+
+    const readout = () => Convert.toDisplay(meta, Store.prog.words[meta.word], Store.ctx());
+    const paint = () => { const d = readout(); val.textContent = d.text; val.classList.toggle("oor", d.outOfRange); };
+
+    let slider = null;
+    if (meta.kind === "onoff" || meta.kind === "chorusMode") {
+      const sel = this._el("select");
+      const opts = this._enumOptions(meta);
+      for (const [raw, label] of opts) {
+        const o = this._el("option", null, label); o.value = raw; sel.appendChild(o);
+      }
+      sel.value = String(Store.prog.words[meta.word]);
+      sel.addEventListener("change", () => this._commit(meta, parseInt(sel.value, 10)));
+      cell.appendChild(sel);
+      cell._setControl = (raw) => { sel.value = String(raw); };
+    } else {
+      const lim = Convert.limitsFor(meta, Store.ctx());
+      slider = this._el("input");
+      slider.type = "range"; slider.min = lim.rawMin; slider.max = lim.rawMax;
+      slider.value = Store.prog.words[meta.word];
+      slider.setAttribute("aria-label", meta.name);
+      slider.addEventListener("input", () => this._commit(meta, parseInt(slider.value, 10)));
+      cell.appendChild(slider);
+      cell._setControl = (raw) => {
+        const l = Convert.limitsFor(meta, Store.ctx());
+        slider.min = l.rawMin; slider.max = l.rawMax;
+        if (document.activeElement !== slider) slider.value = raw;
+      };
+    }
+
+    this._makeEditable(val, meta, paint);
+    paint();
+    cell._refresh = () => { paint(); if (cell._setControl) cell._setControl(Store.prog.words[meta.word]); };
+    this._cells.push(cell);
+    return cell;
+  },
+
+  _enumOptions(meta) {
+    const out = [];
+    for (let raw = meta.rawMin; raw <= meta.rawMax; raw++) {
+      out.push([raw, Convert.toDisplay(meta, raw, Store.ctx()).text]);
+    }
+    return out;
+  },
+
+  // Click a value read-out → inline text input; Enter/blur commits, Esc cancels.
+  _makeEditable(val, meta, paint) {
+    val.addEventListener("click", () => {
+      if (val.querySelector("input")) return;
+      const cur = val.textContent;
+      const input = this._el("input", "val-input");
+      input.value = cur;
+      val.textContent = "";
+      val.appendChild(input);
+      input.focus(); input.select();
+      const commit = () => {
+        const raw = Convert.fromDisplay(meta, input.value, Store.ctx());
+        this._commit(meta, raw);
+        paint();
+      };
+      const cancel = () => paint();
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); commit(); }
+        else if (e.key === "Escape") { e.preventDefault(); cancel(); }
+      });
+      input.addEventListener("blur", commit);
+    });
+  },
+
+  _commit(meta, raw) {
+    Store.setParam(meta, raw);
+  },
+
+  // In-place refresh of all param cells (cheap; keeps DOM & drag focus stable).
+  refreshCells() { if (this._cells) for (const c of this._cells) c._refresh(); },
+
+  /* ------- patch bay (Row 5: 10 × source / destination / scale) --------- */
+  renderPatchBay() {
+    const host = document.getElementById("patchTable");
+    // keep the header row, drop old patch rows
+    host.querySelectorAll(".patch-row").forEach(n => n.remove());
+    const dests = this._destOptions();
+    for (let i = 0; i < 10; i++) host.appendChild(this._makePatchRow(i, dests));
+  },
+
+  _destOptions() {
+    // Destination = a parameter of the loaded program, labelled "row.col NAME".
+    const out = [[0, "—"]];
+    for (const g of Store.layout()) {
+      for (const e of g.params) out.push([e.paramNum, `${g.row}.${e.col} ${e.name}`]);
+    }
+    return out;
+  },
+
+  _makePatchRow(i, dests) {
+    const patch = Store.prog.patches[i];
+    const row = this._el("div", "patch-row");
+    const active = patch.src !== 0;
+    row.classList.toggle("active", active);
+    row.classList.toggle("off", !active);
+    row.appendChild(this._el("span", "pn", String(i)));
+
+    // source
+    const srcSel = this._el("select");
+    DATA.PATCH_SOURCES.forEach((name, raw) => {
+      const o = this._el("option", null, name); o.value = raw; srcSel.appendChild(o);
+    });
+    srcSel.value = String(patch.src);
+    srcSel.addEventListener("change", () => this._commitPatch(i, { src: parseInt(srcSel.value, 10) }));
+    row.appendChild(srcSel);
+
+    // destination
+    const dstSel = this._el("select");
+    for (const [pn, label] of dests) { const o = this._el("option", null, label); o.value = pn; dstSel.appendChild(o); }
+    dstSel.value = String(patch.dest);
+    dstSel.addEventListener("change", () => this._commitPatch(i, { dest: parseInt(dstSel.value, 10) }));
+    row.appendChild(dstSel);
+
+    // scale (knob + numeric)
+    const scaleWrap = this._el("span", "scale");
+    const knob = this._el("span", "knob");
+    const sv = this._el("input", "sv");
+    const setKnob = (s) => { knob.style.setProperty("--rot", (s / 128 * 135) + "deg"); };
+    const setSv = (s) => { sv.value = (s > 0 ? "+" : "") + s; };
+    setKnob(patch.scale); setSv(patch.scale);
+    sv.addEventListener("change", () => {
+      let s = parseInt(sv.value, 10); if (!isFinite(s)) s = patch.scale;
+      s = Math.max(-128, Math.min(128, s)); if (s === 0) s = -128;
+      this._commitPatch(i, { scale: s }); setKnob(s); setSv(s);
+    });
+    this._makeKnobDrag(knob, () => Store.prog.patches[i].scale, (s) => {
+      this._commitPatch(i, { scale: s }); setKnob(s); setSv(s);
+    });
+    scaleWrap.append(knob, sv);
+    row.appendChild(scaleWrap);
+    return row;
+  },
+
+  _commitPatch(i, delta) {
+    const cur = Store.prog.patches[i];
+    Store.setPatch(i, Object.assign({}, cur, delta));
+    // toggle active/off styling without full rebuild
+    const rows = document.querySelectorAll("#patchTable .patch-row");
+    const row = rows[i];
+    if (row) {
+      const active = Store.prog.patches[i].src !== 0;
+      row.classList.toggle("active", active);
+      row.classList.toggle("off", !active);
+    }
+  },
+
+  // Vertical-drag knob: ~200 px = full ±128 range; Shift = fine.
+  _makeKnobDrag(knob, getVal, setVal) {
+    knob.tabIndex = 0;
+    knob.setAttribute("role", "slider");
+    let startY = 0, startVal = 0, dragging = false;
+    const clamp = (s) => { s = Math.round(s); s = Math.max(-128, Math.min(128, s)); return s === 0 ? -128 : s; };
+    const onMove = (e) => {
+      if (!dragging) return;
+      const fine = e.shiftKey ? 0.1 : 1;
+      const dy = startY - e.clientY;
+      setVal(clamp(startVal + dy * (256 / 200) * fine));
+    };
+    const onUp = () => { dragging = false; window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    knob.addEventListener("mousedown", (e) => {
+      e.preventDefault(); dragging = true; startY = e.clientY; startVal = getVal();
+      window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+    });
+    knob.addEventListener("wheel", (e) => { e.preventDefault(); setVal(clamp(getVal() + (e.deltaY < 0 ? 1 : -1))); }, { passive: false });
+    knob.addEventListener("dblclick", () => setVal(-128));
+    knob.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowUp" || e.key === "ArrowRight") { e.preventDefault(); setVal(clamp(getVal() + (e.shiftKey ? 10 : 1))); }
+      else if (e.key === "ArrowDown" || e.key === "ArrowLeft") { e.preventDefault(); setVal(clamp(getVal() - (e.shiftKey ? 10 : 1))); }
+    });
   },
 };
 
@@ -803,7 +1143,10 @@ window.addEventListener("DOMContentLoaded", () => {
   UI.initChannelSelect();
   UI.initMidi();
   UI.initTransfer();
-  // M2: data tables. M3: Store + render path + widgets.
+  Store.onChange((change) => UI.onStoreChange(change));
+  Midi.onBulk = (p) => { if (p.checksumOk && p.data167) UI.applyDump(p, { kind: "scratch", id: null }); };
+  // Start with a neutral scratch program so the editor is populated on load.
+  Store.replaceProgram(Store.makeDefault(7), { origin: { kind: "scratch", id: null } });
 });
 </script>
 </body>
