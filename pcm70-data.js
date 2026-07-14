@@ -395,6 +395,46 @@
     return list;
   })();
 
+  /* ---- Factory preset programs (V2.0 manual Table 2.1, p. 2-4/2-5) ------ *
+   * Matrix position row.col. In PGM CHNG FIX mode a MIDI Program Change of
+   * pc = 50 + row*10 + col loads the program (manual 5-8; e.g. PC 64 → 1.4).
+   * `type` is the algorithm the preset is built on — rows 0–5 are certain;
+   * row 6 (MIDI Effects) types are best-effort (the unit's dump is
+   * authoritative when loaded). Row 7 (Control Program, Cor Reg Table) is
+   * system config, not an effect, so it is omitted. */
+  function pr(row, col, name, type) {
+    return { row, col, name, type, num: `${row}.${col}`, pc: 50 + row * 10 + col };
+  }
+  const PRESET_ROWS = [
+    "Chorus & Echo", "Multiband Delays", "Resonant Chords", "Concert Halls",
+    "Rich Chambers", "Rich Plates", "MIDI Effects",
+  ];
+  const PRESETS = [
+    // Row 0 — Chorus & Echo (BPM variants → Chorus and Rhythm, type 12)
+    pr(0, 0, "CHORUS", 4), pr(0, 1, "CHORUS ECHOES", 4), pr(0, 2, "ECHO FLANGE", 4),
+    pr(0, 3, "STEREO FLANGE", 4), pr(0, 4, "DOUBLE SLAP", 4), pr(0, 5, "SPIN ECHOES", 4),
+    pr(0, 6, "SWARBLE", 4), pr(0, 7, "PSYCHO ECHOES", 4), pr(0, 8, "ECHOES BPM", 12),
+    pr(0, 9, "CHORUS & ECHO BPM", 12),
+    // Row 1 — Multiband Delays (BPM → Multiband Rhythm, type 11)
+    pr(1, 0, "SINGLE DELAY", 5), pr(1, 1, "DOUBLE DELAY", 5), pr(1, 2, "PAN DELAY", 5),
+    pr(1, 3, "CIRCULAR DLYS", 5), pr(1, 4, "4 VOICE DELAY", 5), pr(1, 5, "QUATRO DELAYS", 5),
+    pr(1, 6, "FILTERED DLYS", 5), pr(1, 7, "SHUFFLE BPM", 11), pr(1, 8, "BOUNCING BPM", 11),
+    // Row 2 — Resonant Chords (BPM → Rhythmic Chords, type 13)
+    pr(2, 0, "MAJOR CHORD", 6), pr(2, 1, "MINOR CHORD", 6), pr(2, 2, "7TH SHARP 11", 6),
+    pr(2, 3, "DOM 13TH", 6), pr(2, 4, "RYM IN C BPM", 13), pr(2, 5, "RYM C MIN BPM", 13),
+    // Row 3 — Concert Halls
+    pr(3, 0, "CONCERT HALL", 7), pr(3, 1, "LONG HALL", 7), pr(3, 2, "GYMNASIUM", 7),
+    // Row 4 — Rich Chambers (4.4 Infinite Reverb, type 10)
+    pr(4, 0, "RICH CHAMBER", 8), pr(4, 1, "SMALL ROOM", 8), pr(4, 2, "TILED ROOM", 8),
+    pr(4, 3, "GATED CHAMBER", 8), pr(4, 4, "INF REVERB", 10),
+    // Row 5 — Rich Plates
+    pr(5, 0, "RICH PLATE", 9), pr(5, 1, "SMALL PLATE", 9), pr(5, 2, "GATED PLATE", 9),
+    // Row 6 — MIDI Effects (BPM/MIDI presets; types best-effort — see note above)
+    pr(6, 0, "MIDI ECHO BPM", 12), pr(6, 1, "CASCADE BPM", 11), pr(6, 2, "FILTR PAN BPM", 11),
+    pr(6, 3, "MIDI CHRD BPM", 13), pr(6, 4, "MIDI SLAP BPM", 12), pr(6, 5, "MIDI CT HALL", 7),
+    pr(6, 6, "MIDI INF RVB", 10),
+  ];
+
   /* ---- Target firmware ------------------------------------------------- *
    * The unit runs software V2.0. Confirmed against the V2.0 manual's own MIDI
    * Implementation Data (ch. 8): the sysex framing, Table 1 (param numbering),
@@ -424,6 +464,8 @@
   root.PCM70 = {
     FIRMWARE,
     PROGRAM_TYPES,
+    PRESETS,
+    PRESET_ROWS,
     LAYOUTS,
     REVERB_TIMES,
     LEVELS,
