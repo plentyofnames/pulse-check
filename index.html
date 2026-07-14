@@ -822,6 +822,46 @@ const UI = {
     }
   },
 
+  /* ------- librarian: Registers / Presets / Library tabs ---------------- */
+  _typeChip: { 4: "Echo", 5: "Delay", 6: "Chord", 7: "Hall", 8: "Chmbr", 9: "Plate",
+               10: "Inf", 11: "RhyDly", 12: "RhyCho", 13: "RhyChd" },
+
+  initLibrarian() {
+    this._libTab = "presets";
+    document.querySelectorAll("#libTabs button").forEach((b) => {
+      b.addEventListener("click", () => { this._libTab = b.dataset.tab; this.renderLibrarian(); });
+    });
+    this.renderLibrarian();
+  },
+
+  renderLibrarian() {
+    const tab = this._libTab || "presets";
+    document.querySelectorAll("#libTabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+    const list = document.getElementById("libList");
+    list.innerHTML = "";
+    if (tab === "presets") {
+      for (const p of DATA.PRESETS) {
+        const li = this._el("li");
+        if (Store.origin.kind === "preset" && Store.origin.id === p.num) li.classList.add("on");
+        li.append(
+          this._el("span", "num", p.num),
+          this._el("span", "nm", p.name),
+          this._el("span", "type", this._typeChip[p.type] || ""),
+        );
+        li.title = `Load preset ${p.num} ${p.name}`;
+        li.addEventListener("click", () => this.loadPreset(p));
+        list.appendChild(li);
+      }
+    } else {
+      const li = this._el("li", "lib-empty",
+        tab === "registers"
+          ? "Register sweep arrives in M5. Use Get for the unit's active program."
+          : "Browser library arrives in M5.");
+      li.style.display = "block";
+      list.appendChild(li);
+    }
+  },
+
   /* ------- render path (single; { param } refresh vs full rebuild) ------- */
   _el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -853,6 +893,7 @@ const UI = {
     this.renderProgHeader();
     this.renderParams();
     this.renderPatchBay();
+    this.renderLibrarian();
     this.renderVfd();
     document.getElementById("editedDot").classList.toggle("on", Store.dirty);
     this.updateTransferButtons();
@@ -870,27 +911,21 @@ const UI = {
   },
 
   renderProgramSelect() {
+    // The program (algorithm) type of the working copy. Factory preset PROGRAMS
+    // live in the librarian's Presets tab; this picks the underlying algorithm.
     const sel = document.getElementById("progSel");
-    if (!sel._built) {
-      const ph = this._el("option", null, "— load preset —");
-      ph.value = ""; sel.appendChild(ph);
-      for (let row = 0; row < DATA.PRESET_ROWS.length; row++) {
-        const g = document.createElement("optgroup");
-        g.label = `${row} · ${DATA.PRESET_ROWS[row]}`;
-        for (const p of DATA.PRESETS.filter(x => x.row === row)) {
-          const o = this._el("option", null, `${p.num}  ${p.name}`);
-          o.value = p.num; g.appendChild(o);
-        }
-        sel.appendChild(g);
-      }
-      sel.addEventListener("change", () => {
-        const p = DATA.PRESETS.find(x => x.num === sel.value);
-        if (p) this.loadPreset(p); else this.renderProgramSelect();
-      });
-      sel._built = true;
+    const ids = DATA.availableTypes();
+    if (!ids.includes(Store.prog.type)) ids.push(Store.prog.type); // keep a loaded type visible
+    sel.innerHTML = "";
+    for (const id of ids) {
+      const o = this._el("option", null, DATA.PROGRAM_TYPES[id].name);
+      o.value = id; sel.appendChild(o);
     }
-    // Reflect the current origin: show the preset if one is loaded, else the placeholder.
-    sel.value = Store.origin.kind === "preset" ? String(Store.origin.id) : "";
+    if (!sel._wired) {
+      sel.addEventListener("change", () => Store.setType(parseInt(sel.value, 10)));
+      sel._wired = true;
+    }
+    sel.value = String(Store.prog.type);
   },
 
   renderProgHeader() {
@@ -1189,6 +1224,7 @@ window.addEventListener("DOMContentLoaded", () => {
   UI.initChannelSelect();
   UI.initMidi();
   UI.initTransfer();
+  UI.initLibrarian();
   Store.onChange((change) => UI.onStoreChange(change));
   Midi.onBulk = (p) => { if (p.checksumOk && p.data167) UI.applyDump(p, { kind: "scratch", id: null }); };
   // Start with a neutral scratch program so the editor is populated on load.
