@@ -1,8 +1,14 @@
 # PCM 70 Editor
 
-Web-based editor/librarian for the Lexicon PCM 70 digital effects processor (V3.00
-firmware). Vanilla JS + Web MIDI, no build step, single-page — sibling project to
-`../Lexicon Reflex Editor` (same stack, reuse its MIDI plumbing patterns).
+Web-based editor/librarian for the Lexicon PCM 70 digital effects processor. Vanilla
+JS + Web MIDI, no build step, single-page — sibling project to `../Lexicon Reflex
+Editor` (same stack, reuse its MIDI plumbing patterns).
+
+**Target hardware runs software V2.0.** Parameter data was transcribed from the V3.00
+manual (the only one available); the app is gated to the V2.0 feature set (no program
+types 11–14, no MIDI-clock patch source) via `FIRMWARE` in `pcm70-data.js`. The shared
+algorithms 4–10 are assumed identical V2.0↔V3.0 pending hardware checks — see
+`HARDWARE-NOTES.md`.
 
 **Start here: `IMPLEMENTATION.md`** — full plan: architecture guidelines, sysex
 protocol reference, state model, code structure with schemas, milestone task list

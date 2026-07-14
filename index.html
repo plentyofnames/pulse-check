@@ -354,7 +354,7 @@
   <header class="rack">
     <div class="brand">
       <div class="logo"><u>lexicon</u> PCM 70</div>
-      <div class="sub">Digital Effects Processor · V3.00</div>
+      <div class="sub">Digital Effects Processor · V2.00</div>
     </div>
 
     <div class="vfd" id="vfd">
@@ -842,13 +842,18 @@ const UI = {
 
   renderProgramSelect() {
     const sel = document.getElementById("progSel");
-    if (!sel._built) {
-      for (const id of Object.keys(DATA.PROGRAM_TYPES)) {
-        const o = this._el("option", null, `${id} · ${DATA.PROGRAM_TYPES[id].name}`);
-        o.value = id; sel.appendChild(o);
-      }
+    // Firmware-gated list; include the loaded type even if it's outside the set
+    // (e.g. a V3.0 dump opened on V2.0) so the selector never shows blank.
+    const ids = DATA.availableTypes();
+    if (!ids.includes(Store.prog.type)) ids.push(Store.prog.type);
+    sel.innerHTML = "";
+    for (const id of ids) {
+      const o = this._el("option", null, `${id} · ${DATA.PROGRAM_TYPES[id].name}`);
+      o.value = id; sel.appendChild(o);
+    }
+    if (!sel._wired) {
       sel.addEventListener("change", () => Store.setType(parseInt(sel.value, 10)));
-      sel._built = true;
+      sel._wired = true;
     }
     sel.value = String(Store.prog.type);
   },
@@ -991,11 +996,11 @@ const UI = {
     row.classList.toggle("off", !active);
     row.appendChild(this._el("span", "pn", String(i)));
 
-    // source
+    // source (firmware-gated: MIDI Clock omitted on V2.0)
     const srcSel = this._el("select");
-    DATA.PATCH_SOURCES.forEach((name, raw) => {
+    for (const [raw, name] of DATA.patchSources()) {
       const o = this._el("option", null, name); o.value = raw; srcSel.appendChild(o);
-    });
+    }
     srcSel.value = String(patch.src);
     srcSel.addEventListener("change", () => this._commitPatch(i, { src: parseInt(srcSel.value, 10) }));
     row.appendChild(srcSel);

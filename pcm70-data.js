@@ -5,6 +5,11 @@
  * (pp. 6-6…6-12), size constants Table 10 + the "size" table on 6-13, display
  * formulas 6-13…6-14, and lookup Tables 11–14 (6-15).
  *
+ * Target hardware runs software V2.0, which lacks the V3.0 additions (program
+ * types 11–14 and MIDI-clock patch source). The tables below stay the full
+ * V3.0 superset; the FIRMWARE gate near the exports controls what the UI
+ * offers. See the firmware note there and HARDWARE-NOTES.md.
+ *
  * Every entry carries BOTH `byte` (first byte of the 2-byte word in the bulk
  * dump — drives the sequential word index (byte-47)/2) AND, derived below,
  * `paramNum = row*10 + col` (drives the parameter-change sysex). These are NOT
@@ -381,7 +386,33 @@
     return list;
   })();
 
+  /* ---- Target firmware (the data above is the V3.00 superset) ----------- *
+   * The unit in use runs software V2.0. Two things the V3.00 manual documents
+   * as V3.0 additions are therefore absent on this hardware and must not be
+   * offered by the UI:
+   *   - Program types 11–14: the Rhythm/BPM variants (11 Multiband Rhythm,
+   *     12 Chorus & Rhythm, 13 Rhythmic Chords) all depend on MIDI-clock tempo
+   *     sync, and 14 Inverse Room is explicitly V3.0 (its dumps crash V2.0).
+   *   - Patch source 70 (MIDI Clock): manual 6-5 — "not implemented in V2.0".
+   * The shared algorithms 4–10 are ASSUMED identical between V2.0 and V3.0
+   * (byte layout, limits, checksum) — verify against the unit (see
+   * HARDWARE-NOTES.md). Set FIRMWARE = 3.0 to expose the full V3.0 set. */
+  const FIRMWARE = 2.0;
+  const V3_ONLY_TYPES = new Set([11, 12, 13, 14]);
+  const MIDI_CLOCK_SRC = 70;
+
+  function availableTypes() {
+    const all = Object.keys(PROGRAM_TYPES).map(Number);
+    return FIRMWARE >= 3 ? all : all.filter((t) => !V3_ONLY_TYPES.has(t));
+  }
+  // [rawValue, label] pairs for the source picker; drops MIDI Clock on V2.0.
+  function patchSources() {
+    const pairs = PATCH_SOURCES.map((name, raw) => [raw, name]);
+    return FIRMWARE >= 3 ? pairs : pairs.filter(([raw]) => raw !== MIDI_CLOCK_SRC);
+  }
+
   root.PCM70 = {
+    FIRMWARE,
     PROGRAM_TYPES,
     LAYOUTS,
     REVERB_TIMES,
@@ -389,5 +420,7 @@
     FREQUENCIES,
     DELAY_SAMPLES,
     PATCH_SOURCES,
+    availableTypes,
+    patchSources,
   };
 })(typeof window !== "undefined" ? window : globalThis);
