@@ -5,10 +5,13 @@
  * (pp. 6-6…6-12), size constants Table 10 + the "size" table on 6-13, display
  * formulas 6-13…6-14, and lookup Tables 11–14 (6-15).
  *
- * Target hardware runs software V2.0. Its sysex framing and bulk layout are
- * identical to V3.00, but it has no type 14 (Inverse Room) and no MIDI-clock
- * patch source, and some per-program limits differ (see HARDWARE-NOTES.md).
- * The FIRMWARE gate near the exports controls what the UI offers.
+ * Target hardware runs software V2.0. The layouts below are reconciled to the
+ * V2.0 tables (manual ch. 8, Tables 4–9): Chorus & Echo word order and Concert
+ * Hall (DCY OPT word, 7 reflection levels, no CHORUSING) follow V2.0; the other
+ * algorithms are identical V2.0↔V3.00. V2.0 has no type 14 (Inverse Room) and no
+ * MIDI-clock source; the FIRMWARE gate near the exports enforces that. A few
+ * V2.0 manual misprints were corrected against the display math — see
+ * HARDWARE-NOTES.md.
  *
  * Every entry carries BOTH `byte` (first byte of the 2-byte word in the bulk
  * dump — drives the sequential word index (byte-47)/2) AND, derived below,
@@ -72,9 +75,9 @@
         p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -90, dispMax: 12, unit: "dB" }),
         p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
         p(3, "CHORUSING", 53, 462, 561, "plain"),
-        p(6, "DIFFUSION", 55, 462, 561, "plain"),
+        p(4, "CHORUS",    55, 506, 518, "chorusMode"), // V2.0: word4 (V3.00 swapped this with DIFFUSION)
         p(5, "HC",        57, 496, 527, "freq"),
-        p(4, "CHORUS",    59, 506, 518, "chorusMode"),
+        p(6, "DIFFUSION", 59, 462, 561, "plain"),      // V2.0: word6
       ]},
       { row: 1, label: "Levels", params: [
         p(0, "LVL MST", 67, 477, 547, "signed", { dispMin: -35, dispMax: 35 }),
@@ -159,18 +162,22 @@
       ]},
     ],
 
-    // ---- Table 7: Concert Hall (type 7) ----
+    // ---- Table 7: Concert Hall (type 7), V2.0 (manual p. 8-11) ----
+    // V2.0 differs from V3.00: DCY OPT sits at word 7 with no CHORUSING param,
+    // and row 3 carries 7 reflection levels (V3.00 had 5 + a CHORUSING param).
     concertHall: [
       { row: 0, label: "Master", params: [
         p(0, "MIX",       47, 462, 562, "mix"),
         p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -80, dispMax: 12, unit: "dB" }),
         p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
+        // SIZE: 488–537 (min-size 5). The V2.0 table misprints 491–532/"5.6–34.7m"
+        // — a copy of the Rich Plate row (min-size 8); those are inconsistent with
+        // Concert Hall's own size constants, so we keep the correct 488–537.
         p(3, "SIZE",      53, 488, 537, "size"),
         p(4, "GATE TIME", 55, 384, 639, "gate"),
         p(5, "PDELAY",    57, 385, 638, "predelay"),
         p(6, "HC",        59, 497, 527, "freq"),
-        p(8, "CHORUSING", 61, 462, 561, "plain"),
-        p(7, "DCY OPT",   63, 512, 513, "onoff"),
+        p(7, "DCY OPT",   61, 512, 513, "onoff"),
       ]},
       { row: 1, label: "Reverb time", params: [
         p(0, "RT LOW",   67, 496, 527, "rtime"),
@@ -189,8 +196,10 @@
         p(0, "REFL LVL MSTR", 85, 472, 547, "signed", { dispMin: -35, dispMax: 35 }),
         p(1, "REFL L1", 87, 495, 530, "level"),
         p(2, "REFL L2", 89, 495, 530, "level"),
-        p(3, "REFL R1", 91, 495, 530, "level"),
-        p(4, "REFL R2", 93, 495, 530, "level"),
+        p(3, "REFL L3", 91, 495, 530, "level"),
+        p(4, "REFL R1", 93, 495, 530, "level"),
+        p(5, "REFL R2", 95, 495, 530, "level"),
+        p(6, "REFL R3", 97, 495, 530, "level"),
       ]},
       { row: 4, label: "Reflection delays", params: [
         p(0, "REFL DLY MSTR", 99, 206, 818, "signed", { dispMin: -306, dispMax: 306, unit: "ms" }),
@@ -395,9 +404,8 @@
    *     The Rhythm/BPM types 11–13 (Multiband Rhythm, Chorus & Rhythm, Rhythmic
    *     Chords) DO exist in V2.0 (beat-sync is switch-driven, not MIDI clock).
    *   - No MIDI-Clock patch source: the V2.0 MIDI chart shows Clock TX/RX = no,
-   *     and there is no source #70. (The V3.00 layout tables above are still the
-   *     data source for types 4–13; the per-program limits differ from V2.0 in
-   *     places — see HARDWARE-NOTES.md — pending a V2.0 re-transcription.)
+   *     and there is no source #70. (The layout tables above are reconciled to
+   *     the V2.0 per-program tables — see HARDWARE-NOTES.md.)
    * Set FIRMWARE = 3.0 to expose type 14 and the MIDI-Clock source. */
   const FIRMWARE = 2.0;
   const V3_ONLY_TYPES = new Set([14]);          // Inverse Room — V3.0 only

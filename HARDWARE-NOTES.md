@@ -26,30 +26,37 @@ transcribed from V3.00 and are being reconciled to V2.0.
 - **The unit never transmits parameter changes** (8-6) — Get-to-resync model holds.
 - **30 ms between stored bulk messages** (8-5) — matches our pacing floor.
 
-## OPEN: per-program parameter tables differ V2.0 ↔ V3.00 — needs re-transcription
+## DONE: per-program tables reconciled to V2.0 (Tables 4–9, pp. 8-8…8-14)
 
-The V2.0 per-program tables (Tables 4–9, pp. 8-8…8-14) are **not identical** to the
-V3.00 tables currently in `pcm70-data.js`. Proven on **Concert Hall (V2.0 p. 8-11)**:
+All six V2.0 tables were diffed against the V3.00 data. Only two layouts differed:
 
-- **SIZE**: V2.0 = raw `491–532`, display "5.6–34.7m" (implies min-size 8); V3.00 =
-  `488–537`, "3.5–38.3m" (min-size 5). The V2.0 size row is internally inconsistent with
-  a min-size of 5, so the V2.0 size constants on p. 8-14 must be read carefully.
-- **Reflections**: V2.0 Concert Hall has **7 reflection levels + 7 reflection delays**
-  (words 19–25 then 26–32, contiguous); V3.00 has **5 levels + 7 delays** (words 24–25
-  unused). Real structural difference.
-- **Manual printing errors on p. 8-11**: the Param# column is shifted one row below
-  Table 1's `10*row+col` rule (rows 2–4 print 10.., 20.., 30.. instead of 20.., 30..,
-  40..), and row 4's Byte# column overlaps row 3. Trust byte-sequential order + the
-  `10*row+col` rule, not the printed Param#/Byte# in those rows.
+- **Chorus and Echo (Table 4)**: V2.0 orders row 0 naturally — CHORUS at word 4
+  (byte 55), DIFFUSION at word 6 (byte 59). V3.00 had swapped those two words. Fixed.
+- **Concert Hall (Table 7)**: V2.0 has **DCY OPT at word 7 and no CHORUSING param**
+  (V3.00 added CHORUSING at word 7 and pushed DCY OPT to word 8), and **7 reflection
+  levels** (words 19–25) where V3.00 had 5 (words 24–25 unused). Both fixed.
+- **Multiband (5), Resonant Chords (6), Rich Chamber/Plate (8), Infinite (9)**: byte-
+  for-byte identical to what we had — no change.
+- **Size constants (p. 8-14)** match our `sizeParams` exactly (Concert Hall 5/444/164/
+  31362, Rich Chamber 8/388/511/30151, Rich Plate 8/471/424/30892, Inf 8/388/511/30151).
 
-### To do
-- [ ] Re-transcribe V2.0 Tables 4–9 (pp. 8-8…8-14) into `pcm70-data.js`, one table per
-      pass + a diff pass, correcting the printed-column errors via byte order + Table 1.
-- [ ] Read V2.0 size-constants table (p. 8-14) — get V2.0 min-size / time-const / size-
-      const / size-base per reverb type (may differ from V3.00 Table 10).
-- [ ] **Cross-check against the unit** for cells the V2.0 manual prints inconsistently
-      (Concert Hall SIZE min-size; reflection counts): Get a known factory program of
-      each algorithm and compare decoded display values to the front panel.
+### Manual errors in the V2.0 tables (worked around, not followed literally)
+- **Concert Hall SIZE** prints `491–532`/"5.6–34.7m" (p. 8-11) — these are byte-for-byte
+  the Rich Plate row and imply min-size 8, contradicting Concert Hall's min-size 5. Kept
+  the correct `488–537` (min-size 5); the display formula `(size+minSize)*71/100`
+  reproduces Rich Plate's own "5.6–34.7m" from min-size 8, confirming the copy-paste.
+- **Size formula** on p. 8-14 prints `*71/10`; the correct divisor is `/100` (verified
+  against Rich Plate's printed 5.6–34.7 m range). Our Convert uses `/100`.
+- **Param#/Byte# columns** in the reverb tables are shifted one row (rows print 10.., 20..,
+  30.. instead of 20.., 30.., 40..) and row-4 Byte# overlaps row 3. We follow byte order
+  + Table 1's `10*row+col` rule instead.
+
+### Still to confirm on hardware
+- [ ] **BPM-variant limits** (types 11–13): the `bpm` master/voice overrides (448–575 /
+      500–524) come from the V3.00 footnotes; the V2.0 footnotes are partly cropped in
+      the scan. Get a Rhythm program and check the delay-parameter ranges.
+- [ ] Spot-check a Concert Hall dump from the unit to confirm the 7-reflection-level
+      layout and DCY OPT word (the V2.0 table page had the printing errors noted above).
 
 ## Protocol behaviour (from M4 onward)
 - [ ] Active dump request (`60`) returns the running program.

@@ -40,11 +40,12 @@ identical to V3.00, but two V3.0 features are absent, so the app does not offer 
 
 To re-enable the full V3.0 set, set `FIRMWARE = 3.0` in [`pcm70-data.js`](pcm70-data.js).
 
-> **Known gap:** the per-program parameter tables currently in `pcm70-data.js` were
-> transcribed from the V3.00 manual, and some V2.0 limits differ (e.g. Concert Hall
-> SIZE range and reflection count). Re-transcription from the V2.0 tables is tracked in
-> [`HARDWARE-NOTES.md`](HARDWARE-NOTES.md). Until then, decoded display values for a few
-> parameters may be off on a V2.0 unit.
+The per-program parameter tables in `pcm70-data.js` are reconciled to the V2.0 manual
+(ch. 8). Two layouts differed from V3.00 and were corrected — Chorus & Echo word order
+and Concert Hall (DCY OPT word, 7 reflection levels, no CHORUSING); the rest were
+identical. A couple of V2.0 manual misprints were worked around, and the BPM-variant
+limits still want a hardware spot-check — details in
+[`HARDWARE-NOTES.md`](HARDWARE-NOTES.md).
 
 ## Required PCM 70 settings
 
