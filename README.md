@@ -29,18 +29,22 @@ not available in Firefox or Safari.
 
 ## Firmware
 
-The unit this editor targets runs **software V2.0**. The V3.00 manual documents two
-additions that are absent on V2.0, so the app does not offer them:
+The unit this editor targets runs **software V2.0**. Confirmed against the V2.0 manual's
+own MIDI Implementation Data (ch. 8), the sysex framing and 167-byte bulk layout are
+identical to V3.00, but two V3.0 features are absent, so the app does not offer them:
 
-- **Program types 11–14** — the Rhythm/BPM variants (Multiband Rhythm, Chorus &
-  Rhythm, Rhythmic Chords) and **Inverse Room**. The BPM programs need MIDI-clock
-  tempo sync; Inverse Room is explicitly V3.0 (its dumps can crash a V2.0 unit).
-- **Patch source “MIDI Clock”** — "not implemented in version 2.0" (manual 6-5).
+- **Program type 14 (Inverse Room)** — V3.0 only (its dumps can crash a V2.0 unit).
+  The Rhythm/BPM algorithms (types 11–13) **do** exist in V2.0 and are available.
+- **Patch source “MIDI Clock”** — V2.0 has no MIDI-clock source; BPM programs sync via
+  switches, not MIDI clock.
 
-The seven shared algorithms (types 4–10) are assumed identical between V2.0 and V3.0
-in byte layout, limits, and checksum — this assumption is flagged for verification
-against the real unit in [`HARDWARE-NOTES.md`](HARDWARE-NOTES.md). To re-enable the
-full V3.0 set, set `FIRMWARE = 3.0` in [`pcm70-data.js`](pcm70-data.js).
+To re-enable the full V3.0 set, set `FIRMWARE = 3.0` in [`pcm70-data.js`](pcm70-data.js).
+
+> **Known gap:** the per-program parameter tables currently in `pcm70-data.js` were
+> transcribed from the V3.00 manual, and some V2.0 limits differ (e.g. Concert Hall
+> SIZE range and reflection count). Re-transcription from the V2.0 tables is tracked in
+> [`HARDWARE-NOTES.md`](HARDWARE-NOTES.md). Until then, decoded display values for a few
+> parameters may be off on a V2.0 unit.
 
 ## Required PCM 70 settings
 

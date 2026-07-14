@@ -5,10 +5,10 @@
  * (pp. 6-6…6-12), size constants Table 10 + the "size" table on 6-13, display
  * formulas 6-13…6-14, and lookup Tables 11–14 (6-15).
  *
- * Target hardware runs software V2.0, which lacks the V3.0 additions (program
- * types 11–14 and MIDI-clock patch source). The tables below stay the full
- * V3.0 superset; the FIRMWARE gate near the exports controls what the UI
- * offers. See the firmware note there and HARDWARE-NOTES.md.
+ * Target hardware runs software V2.0. Its sysex framing and bulk layout are
+ * identical to V3.00, but it has no type 14 (Inverse Room) and no MIDI-clock
+ * patch source, and some per-program limits differ (see HARDWARE-NOTES.md).
+ * The FIRMWARE gate near the exports controls what the UI offers.
  *
  * Every entry carries BOTH `byte` (first byte of the 2-byte word in the bulk
  * dump — drives the sequential word index (byte-47)/2) AND, derived below,
@@ -41,7 +41,7 @@
    * reverb type even though those types share a layout.                      */
   const PROGRAM_TYPES = {
     4:  { name: "Chorus and Echo",   layout: "chorusEcho" },
-    5:  { name: "Multiband Delay",   layout: "multiband" },
+    5:  { name: "Multiband",         layout: "multiband" },
     6:  { name: "Resonant Chords",   layout: "resonantChords" },
     7:  { name: "Concert Hall",      layout: "concertHall",
           sizeParams: { minSize: 5, timeConst: 444, sizeConst: 164, sizeBase: 31362, sizeRawMin: 488, sizeRawMax: 537 } },
@@ -386,20 +386,22 @@
     return list;
   })();
 
-  /* ---- Target firmware (the data above is the V3.00 superset) ----------- *
-   * The unit in use runs software V2.0. Two things the V3.00 manual documents
-   * as V3.0 additions are therefore absent on this hardware and must not be
-   * offered by the UI:
-   *   - Program types 11–14: the Rhythm/BPM variants (11 Multiband Rhythm,
-   *     12 Chorus & Rhythm, 13 Rhythmic Chords) all depend on MIDI-clock tempo
-   *     sync, and 14 Inverse Room is explicitly V3.0 (its dumps crash V2.0).
-   *   - Patch source 70 (MIDI Clock): manual 6-5 — "not implemented in V2.0".
-   * The shared algorithms 4–10 are ASSUMED identical between V2.0 and V3.0
-   * (byte layout, limits, checksum) — verify against the unit (see
-   * HARDWARE-NOTES.md). Set FIRMWARE = 3.0 to expose the full V3.0 set. */
+  /* ---- Target firmware ------------------------------------------------- *
+   * The unit runs software V2.0. Confirmed against the V2.0 manual's own MIDI
+   * Implementation Data (ch. 8): the sysex framing, Table 1 (param numbering),
+   * and Table 2 (167-byte bulk layout) are IDENTICAL to V3.00. The V2.0
+   * differences that matter here:
+   *   - Table 3 program types stop at 13 — there is NO type 14 (Inverse Room).
+   *     The Rhythm/BPM types 11–13 (Multiband Rhythm, Chorus & Rhythm, Rhythmic
+   *     Chords) DO exist in V2.0 (beat-sync is switch-driven, not MIDI clock).
+   *   - No MIDI-Clock patch source: the V2.0 MIDI chart shows Clock TX/RX = no,
+   *     and there is no source #70. (The V3.00 layout tables above are still the
+   *     data source for types 4–13; the per-program limits differ from V2.0 in
+   *     places — see HARDWARE-NOTES.md — pending a V2.0 re-transcription.)
+   * Set FIRMWARE = 3.0 to expose type 14 and the MIDI-Clock source. */
   const FIRMWARE = 2.0;
-  const V3_ONLY_TYPES = new Set([11, 12, 13, 14]);
-  const MIDI_CLOCK_SRC = 70;
+  const V3_ONLY_TYPES = new Set([14]);          // Inverse Room — V3.0 only
+  const MIDI_CLOCK_SRC = 70;                     // patch source — V3.0 only
 
   function availableTypes() {
     const all = Object.keys(PROGRAM_TYPES).map(Number);

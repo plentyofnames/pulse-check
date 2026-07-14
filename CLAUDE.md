@@ -4,11 +4,12 @@ Web-based editor/librarian for the Lexicon PCM 70 digital effects processor. Van
 JS + Web MIDI, no build step, single-page — sibling project to `../Lexicon Reflex
 Editor` (same stack, reuse its MIDI plumbing patterns).
 
-**Target hardware runs software V2.0.** Parameter data was transcribed from the V3.00
-manual (the only one available); the app is gated to the V2.0 feature set (no program
-types 11–14, no MIDI-clock patch source) via `FIRMWARE` in `pcm70-data.js`. The shared
-algorithms 4–10 are assumed identical V2.0↔V3.0 pending hardware checks — see
-`HARDWARE-NOTES.md`.
+**Target hardware runs software V2.0.** Both manuals are on hand: `lexicon_pcm70.pdf`
+(V2.0, MIDI data in ch. 8) and `PCM70-OM_original.pdf` (V3.00, ch. 6). V2.0's sysex
+framing + bulk layout are identical to V3.00, but it has no type 14 (Inverse Room) and
+no MIDI-clock source — gated via `FIRMWARE` in `pcm70-data.js`. The per-program
+parameter tables still hold V3.00 values and differ from V2.0 in places (Concert Hall
+proven); re-transcription to V2.0 is tracked in `HARDWARE-NOTES.md`.
 
 **Start here: `IMPLEMENTATION.md`** — full plan: architecture guidelines, sysex
 protocol reference, state model, code structure with schemas, milestone task list
