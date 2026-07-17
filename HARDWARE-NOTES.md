@@ -79,6 +79,11 @@ All six V2.0 tables were diffed against the V3.00 data. Only two layouts differe
 - [ ] **Sweep unit** (Registers tab): all 50 stored dumps arrive, 30 ms pacing holds,
       names look right. Then **Backup (.syx)** and keep the file (pre-experiment
       safety copy of whatever is on the unit).
+- [ ] **Preset sweep** (Presets tab, "Sweep → library"): loads all 43 factory
+      presets one by one via PC + Get (~1 min, audio hiccups) and saves them to the
+      library; afterwards "Export .syx" gives a provenance-verified V2.0 preset
+      bank. Watch for name mismatches in the console (they would reveal errors in
+      our preset table). Compare a few entries against `dumps/Lexicon-PCM-70-Ver-2.syx`.
 - [ ] **Store with verify**: store the working copy into an unused register — expect
       "✓ stored and verified". Also try with M PROTECT on to see the failure path.
 - [ ] **Patch live-sync**: with auto-send on, change a patch source/destination/scale

@@ -412,8 +412,10 @@
       <div class="lib-foot">
         <button class="btn" id="btnSweep">Sweep unit</button>
         <button class="btn" id="btnBackup">Backup (.syx)</button>
+        <button class="btn" id="btnSweepPresets">Sweep → library</button>
         <button class="btn" id="btnSaveLib">Save current</button>
         <button class="btn" id="btnImport">Import .syx</button>
+        <button class="btn" id="btnExportLib">Export .syx</button>
         <input type="file" id="importFile" accept=".syx" multiple hidden>
       </div>
     </aside>
@@ -902,7 +904,9 @@ const UI = {
     });
     document.getElementById("btnSweep").addEventListener("click", () => Librarian.sweep());
     document.getElementById("btnBackup").addEventListener("click", () => Librarian.backup());
+    document.getElementById("btnSweepPresets").addEventListener("click", () => Librarian.sweepPresets());
     document.getElementById("btnSaveLib").addEventListener("click", () => Librarian.saveCurrent());
+    document.getElementById("btnExportLib").addEventListener("click", () => Librarian.exportLibrary());
     const fileInput = document.getElementById("importFile");
     document.getElementById("btnImport").addEventListener("click", () => fileInput.click());
     fileInput.addEventListener("change", async () => {
@@ -927,9 +931,12 @@ const UI = {
     const show = (id, on) => { document.getElementById(id).style.display = on ? "" : "none"; };
     show("btnSweep", tab === "registers");
     show("btnBackup", tab === "registers");
+    show("btnSweepPresets", tab === "presets");
     show("btnSaveLib", tab === "library");
     show("btnImport", tab === "library");
+    show("btnExportLib", tab === "library");
     document.getElementById("btnSweep").disabled = Librarian.sweeping;
+    document.getElementById("btnSweepPresets").disabled = Librarian.sweeping;
     const list = document.getElementById("libList");
     list.innerHTML = "";
 
@@ -1505,6 +1512,82 @@ const Librarian = {
     Log.info(`Import ${label}: ${added} programs added` +
       (empty ? `, ${empty} empty slots skipped` : "") +
       (bad ? `, ${bad} failed checksum` : "") + ".");
+  },
+
+  // Factory presets cannot be requested directly (stored-dump requests only
+  // address registers 0–49), so sweeping them means: load each via Program
+  // Change, Get the active dump, save it to the library. Audio hiccups on
+  // every load; the pre-sweep working copy is re-sent to the unit afterwards.
+  async sweepPresets() {
+    if (this.sweeping) return;
+    if (!(Midi.out && Midi.in)) { Log.info("Preset sweep: connect MIDI first."); return; }
+    this.sweeping = true;
+    UI.renderLibrarian();
+    Log.info(`Preset sweep: loading ${DATA.PRESETS.length} factory presets one by one (audio will hiccup)…`);
+    if (!UI.blockV3Send()) {
+      Midi.sendNow(Sysex.buildBulkData(Midi.channel(), { stored: false, reg: 50, data167: Codec.encodeProgram(Store.prog) }));
+      await sleep(300);
+    }
+    let ok = 0, fail = 0;
+    for (const p of DATA.PRESETS) {
+      try {
+        Midi.sendNow(new Uint8Array([0xc0 | Midi.channel(), p.pc & 0x7f]));
+        let prog = null, data = null, match = false;
+        for (let attempt = 1; attempt <= 2 && !match; attempt++) {
+          await sleep(PC_LOAD_DELAY_MS * attempt);
+          const reply = await Midi.request(Sysex.buildDumpRequest(Midi.channel(), { stored: false, reg: 50 }),
+            { match: (m) => m.kind === "bulk" && !m.stored, timeoutMs: 1500, retries: 1 });
+          if (!(reply.checksumOk && reply.data167)) continue;
+          data = reply.data167;
+          prog = Codec.decodeProgram(data);
+          match = prog.name.trim().toUpperCase() === p.name.trim().toUpperCase();
+        }
+        if (prog && data && (match || prog.type === p.type)) {
+          const src = `preset ${p.num}`;
+          const entry = {
+            id: `L${Date.now().toString(36)}_${p.pc}`,
+            name: prog.name.trim() || p.name, type: prog.type, ts: Date.now(), src,
+            b64: this._toB64(data),
+          };
+          const idx = this.lib.findIndex(e => e.src === src);
+          if (idx >= 0) this.lib[idx] = entry; else this.lib.push(entry);
+          this._saveLib();
+          ok++;
+          if (!match) Log.info(`· ${p.num}: unit says "${prog.name.trim()}", table says "${p.name}" — saved the unit's version.`);
+        } else {
+          fail++;
+          Log.info(`⚠ ${p.num} ${p.name}: unit returned ${prog ? `"${prog.name.trim()}"` : "no valid dump"} — skipped.`);
+        }
+      } catch (e) {
+        fail++;
+        Log.info(`⚠ ${p.num} ${p.name}: ${e.message}`);
+      }
+      UI.renderLibrarian();
+    }
+    // put the unit back where the editor left it
+    if (!UI.blockV3Send()) {
+      Midi.enqueue(Sysex.buildBulkData(Midi.channel(), { stored: false, reg: 50, data167: Codec.encodeProgram(Store.prog) }));
+    }
+    this.sweeping = false;
+    this._saveLib();
+    UI.renderLibrarian();
+    Log.info(`Preset sweep done: ${ok} saved to the library${fail ? `, ${fail} failed` : ""}; working copy re-sent to the unit.`);
+  },
+
+  // Library → one .syx of active-buffer-format dumps (re-importable here;
+  // replaying it at a unit just loads each program into the active buffer).
+  exportLibrary() {
+    if (!this.lib.length) { Log.info("Export: library is empty."); return; }
+    const parts = this.lib.map(e =>
+      Sysex.buildBulkData(Midi.channel(), { stored: false, reg: 50, data167: this._fromB64(e.b64) }));
+    const d = new Date(), pad = (n) => String(n).padStart(2, "0");
+    const fn = `pcm70-library-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.syx`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(parts, { type: "application/octet-stream" }));
+    a.download = fn;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    Log.info(`Export: wrote ${parts.length} programs to ${fn}.`);
   },
 
   // Full-bank .syx download from the register cache (sweeps first if needed).
