@@ -168,11 +168,19 @@
   .lib-tabs button {
     flex: 1; font: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
     padding: 6px 4px; cursor: pointer;
-    border: 1px solid var(--line); border-bottom: none;
+    border: 1px solid var(--line);
     border-radius: 4px 4px 0 0;
     background: var(--panel-2); color: var(--ink-soft);
+    /* overlap the list's top border so the active tab can open into it */
+    border-bottom: 1px solid var(--line-soft);
+    margin-bottom: -1px;
+    position: relative;
   }
-  .lib-tabs button.on { background: var(--panel); color: var(--ink); border-color: var(--line); }
+  .lib-tabs button.on {
+    background: var(--panel); color: var(--ink);
+    border-bottom-color: var(--panel); /* no line under the active tab */
+    z-index: 1;
+  }
   .lib-list { list-style: none; margin: 0; padding: 6px; border-top: 1px solid var(--line-soft); max-height: 460px; overflow-y: auto; }
   .lib-list li {
     display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto; align-items: center; gap: 6px;
@@ -200,6 +208,9 @@
   .lib-foot { padding: 8px; border-top: 1px solid var(--line-soft); display: flex; gap: 6px; }
   .lib-foot .btn { flex: 1; padding: 6px 4px; font-size: 10.5px; font-weight: 600; }
   .lib-empty { padding: 24px 12px; text-align: center; color: var(--ink-soft); font-size: 11.5px; }
+  /* empty-state rows span the full width and are not clickable-looking */
+  .lib-list li.lib-empty { display: block; cursor: default; }
+  .lib-list li.lib-empty:hover { background: none; }
 
   /* program editor */
   .prog-head {
