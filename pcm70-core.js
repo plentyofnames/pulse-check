@@ -243,8 +243,21 @@
     return out; // index 0 = Db1, index 74 = Eb7
   })();
 
+  // Table 13 index anchor: raw 496 → entry 0 (0 Hz) for ALL freq params.
+  // Params whose rawMin is 497 (Concert Hall XOVER/HC, Rich HC, …) start at
+  // entry 1 = 170 Hz, matching their printed display ranges. Anchoring at each
+  // param's own rawMin (the old behavior) contradicted those ranges by one step.
+  const FREQ_BASE = 496;
+
   const Convert = {
     PITCH_NAMES,
+    FREQ_BASE,
+
+    // Hardware clamps table lookups at the ends: factory presets store raw
+    // values beyond the printed limits (proven 2026-07-14: PSYCHO ECHOES HC is
+    // raw 552, front panel shows "15.0 kHz"). Mirror that — the amber
+    // out-of-range flag and the dump audit log keep the evidence visible.
+    _tbl(table, idx) { return table[Math.max(0, Math.min(table.length - 1, idx))]; },
 
     // --- size-context helpers (reverb programs only) ---
     _sp(type) { return (root.PCM70.PROGRAM_TYPES[type] || {}).sizeParams || null; },
@@ -304,11 +317,19 @@
 
     // toDisplay -> { text, num, outOfRange }. num is the numeric display value
     // (null for pure enums), used by fromDisplay's nearest-match.
+    // Values outside a lookup table render as "? raw N" (never "undefined") —
+    // real dumps DO exceed the manuals' printed limits; the raw readout is the
+    // evidence we need to fix the tables.
     toDisplay(meta, raw, ctx) {
       const limits = this.limitsFor(meta, ctx);
       const oor = raw < limits.rawMin || raw > limits.rawMax;
       const wrap = (text, num) => ({ text, num: num == null ? null : num, outOfRange: oor });
-      const val = raw - meta.rawMin; // "value" used by most manual formulas
+      const unknown = () => ({ text: `? raw ${raw}`, num: null, outOfRange: true });
+      // "value" used by most manual formulas — anchored at the BPM-variant
+      // limits when the program is a Rhythm type and the param has overrides.
+      const bpmActive = this._isBpm(ctx.type) && !!meta.bpm;
+      const base = bpmActive ? meta.bpm : meta;
+      const val = raw - base.rawMin;
       const D = root.PCM70;
 
       switch (meta.kind) {
@@ -321,6 +342,10 @@
         case "onoff":    return wrap(raw >= meta.rawMax ? "ON" : "OFF", null);
 
         case "fxdb": case "linear": case "signed": case "pct": {
+          // BPM variants replace the delay/predelay master with RATE BPM
+          // (448–575). The step→BPM mapping is uncalibrated — show the raw
+          // step until a hardware comparison pins it down (HARDWARE-NOTES).
+          if (bpmActive) return wrap(`rate ${val}`, val);
           const n = Math.round(this._lin(meta, raw, limits)); // manual shows integer steps
           const sign = (meta.dispMin < 0 && n > 0) ? "+" : "";
           return wrap(sign + n + (meta.unit ? " " + meta.unit : ""), n);
@@ -332,12 +357,12 @@
           return wrap(txt, n);
         }
         case "level": {
-          const lv = D.LEVELS[val];
+          const lv = this._tbl(D.LEVELS, val);
           if (lv === "OFF" || lv === "FULL") return wrap(lv, null);
           return wrap(lv + " dB", typeof lv === "number" ? lv : null);
         }
         case "freq": {
-          const hz = D.FREQUENCIES[val];
+          const hz = this._tbl(D.FREQUENCIES, raw - FREQ_BASE);
           return wrap(this._fmtFreq(hz), hz);
         }
         case "size": {
@@ -349,7 +374,7 @@
         case "rtime": {
           const sp = this._sp(ctx.type);
           const timeFactor = Math.round(this._sizeFactor(ctx) * sp.timeConst / 1000);
-          const t = timeFactor * D.REVERB_TIMES[val] / 500; // seconds
+          const t = timeFactor * this._tbl(D.REVERB_TIMES, val) / 500; // seconds
           const s = this._sig3(t);
           return wrap(s + " s", s);
         }
@@ -364,18 +389,31 @@
           return wrap(ms + " ms", ms);
         }
         case "delay": {
-          const ms = this._sig3(this._delayMs(val));
+          // BPM variants: voice delays are beat fractions — 25 raw steps =
+          // 0/24…24/24 of a beat (manual 3-3 "smallest fraction is 1/24").
+          if (bpmActive) {
+            const n = Math.max(0, Math.min(24, val));
+            return wrap(`${n}/24 beat`, n);
+          }
+          // below-range raws clamp to 0 ms, like the hardware display
+          const ms = this._sig3(this._delayMs(Math.max(0, val)));
+          if (!isFinite(ms)) return unknown();
           return wrap(ms + " ms", ms);
         }
         case "delaylin": {
+          if (bpmActive) {
+            const n = Math.max(0, Math.min(24, val));
+            return wrap(`${n}/24 beat`, n);
+          }
           const ms = Math.round(this._lin(meta, raw, limits));
           return wrap(ms + " ms", ms);
         }
         case "chorusMode": {
-          if (val === 0) return wrap("OFF", null);
-          return wrap(val <= 6 ? `${val}VC S` : `${val - 6}VC T`, null);
+          const v = Math.max(0, Math.min(12, val));
+          if (v === 0) return wrap("OFF", null);
+          return wrap(v <= 6 ? `${v}VC S` : `${v - 6}VC T`, null);
         }
-        case "pitch": return wrap(PITCH_NAMES[val] || "?", null);
+        case "pitch": return wrap(this._tbl(PITCH_NAMES, val), null);
         default: return wrap(String(raw), raw);
       }
     },

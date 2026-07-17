@@ -6,9 +6,12 @@
  * formulas 6-13…6-14, and lookup Tables 11–14 (6-15).
  *
  * Target hardware runs software V2.0. The layouts below are reconciled to the
- * V2.0 tables (manual ch. 8, Tables 4–9): Chorus & Echo word order and Concert
- * Hall (DCY OPT word, 7 reflection levels, no CHORUSING) follow V2.0; the other
- * algorithms are identical V2.0↔V3.00. V2.0 has no type 14 (Inverse Room) and no
+ * V2.0 tables (manual ch. 8, Tables 4–9) EXCEPT where real dumps proved the
+ * V2.0 print wrong: Chorus & Echo row 0 keeps the V3.00 byte order (hardware-
+ * refuted 2026-07-14, see HARDWARE-NOTES). Concert Hall still follows the V2.0
+ * table (DCY OPT word 7, 7 reflection levels, no CHORUSING) — from the same
+ * suspect scan, so watch the dump audit log. Other algorithms are identical
+ * V2.0↔V3.00. V2.0 has no type 14 (Inverse Room) and no
  * MIDI-clock source; the FIRMWARE gate near the exports enforces that. A few
  * V2.0 manual misprints were corrected against the display math — see
  * HARDWARE-NOTES.md.
@@ -74,10 +77,16 @@
         p(0, "MIX",       47, 462, 562, "mix"),
         p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -90, dispMax: 12, unit: "dB" }),
         p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
+        // Dump order per the V3.00 table (CHORUS@59, DIFFUSION@55). The V2.0
+        // manual's "natural" order (CHORUS@55, DIFFUSION@59) was REFUTED on the
+        // real V2.0 unit 2026-07-14: a preset dump had byte55=527 (impossible
+        // for CHORUS, max 518; fine for DIFFUSION=65) and byte59=518 (= CHORUS
+        // 6VC T exactly). Param numbers (cols) still per the manuals — verify
+        // 0.4/0.5/0.6 against the front panel. See HARDWARE-NOTES.md.
         p(3, "CHORUSING", 53, 462, 561, "plain"),
-        p(4, "CHORUS",    55, 506, 518, "chorusMode"), // V2.0: word4 (V3.00 swapped this with DIFFUSION)
+        p(4, "CHORUS",    59, 506, 518, "chorusMode"),
         p(5, "HC",        57, 496, 527, "freq"),
-        p(6, "DIFFUSION", 59, 462, 561, "plain"),      // V2.0: word6
+        p(6, "DIFFUSION", 55, 462, 561, "plain"),
       ]},
       { row: 1, label: "Levels", params: [
         p(0, "LVL MST", 67, 477, 547, "signed", { dispMin: -35, dispMax: 35 }),
@@ -93,7 +102,7 @@
       ]},
       { row: 4, label: "Pan", params: [
         p(0, "PAN MST", 109, 412, 612, "signed", { dispMin: -100, dispMax: 100 }),
-        ...voices(1, "V", 111, 462, 562, "pan").map((e, i) => (e.name = `V${i + 1} PAN`, e)),
+        ...voices(1, "V", 111, 462, 562, "pan", { dispMin: -50, dispMax: 50 }).map((e, i) => (e.name = `V${i + 1} PAN`, e)),
       ]},
     ],
 
@@ -125,7 +134,7 @@
       ]},
       { row: 5, label: "Pan", params: [
         p(0, "PAN MST", 123, 412, 612, "signed", { dispMin: -100, dispMax: 100 }),
-        ...voices(1, "V", 125, 462, 562, "pan").map((e, i) => (e.name = `V${i + 1} PAN`, e)),
+        ...voices(1, "V", 125, 462, 562, "pan", { dispMin: -50, dispMax: 50 }).map((e, i) => (e.name = `V${i + 1} PAN`, e)),
       ]},
     ],
 
@@ -158,13 +167,26 @@
       ]},
       { row: 5, label: "Pan", params: [
         p(0, "PAN MST", 123, 412, 612, "signed", { dispMin: -100, dispMax: 100 }),
-        ...voices(1, "V", 125, 462, 562, "panR").map((e, i) => (e.name = `V${i + 1} PAN`, e)),
+        ...voices(1, "V", 125, 462, 562, "panR", { dispMin: -50, dispMax: 50 }).map((e, i) => (e.name = `V${i + 1} PAN`, e)),
       ]},
     ],
 
-    // ---- Table 7: Concert Hall (type 7), V2.0 (manual p. 8-11) ----
-    // V2.0 differs from V3.00: DCY OPT sits at word 7 with no CHORUSING param,
-    // and row 3 carries 7 reflection levels (V3.00 had 5 + a CHORUSING param).
+    // ---- Table 7: Concert Hall (type 7) ----
+    // Rows 3/4 calibrated against the real unit 2026-07-17 (factory 3.0 dump
+    // vs. front-panel readout — see HARDWARE-NOTES "Concert Hall rows 3/4"):
+    //   - 7-wide rows, levels 85–97 then delays 99–111, exactly as the V2.0
+    //     ch8 table prints them. (The ch4 matrix's N/A at x.5/x.6 was a
+    //     misprint — the panel has L3/R3 in both rows.)
+    //   - Zero points from hardware: LVL MSTR 0 = raw 512 → range 477–547
+    //     (printed 472 was a misprint; matches every other ±35 master).
+    //     DLY MSTR 0 = raw 400 → range 94–706 (±306 centered on 400, NOT 512).
+    //     Delay voices 0 ms = raw 512 → range 512–736. Both PROVISIONAL until
+    //     a panel-vs-editor sweep confirms the extremes.
+    //   - The firmware stores out-of-range voice values (master drags apply a
+    //     raw delta, factory data ships below-range bytes) and clamps only the
+    //     display — expect audit lines on factory programs; they are real.
+    // CHORUSING param 8 @ byte 61, DCY OPT param 7 @ byte 63 (V3.00 cross —
+    // hardware-confirmed 2026-07-17: editor DCY OPT toggle moves 0.7 on the unit).
     concertHall: [
       { row: 0, label: "Master", params: [
         p(0, "MIX",       47, 462, 562, "mix"),
@@ -177,7 +199,8 @@
         p(4, "GATE TIME", 55, 384, 639, "gate"),
         p(5, "PDELAY",    57, 385, 638, "predelay"),
         p(6, "HC",        59, 497, 527, "freq"),
-        p(7, "DCY OPT",   61, 512, 513, "onoff"),
+        p(7, "DCY OPT",   63, 512, 513, "onoff"),   // byte/param crossed —
+        p(8, "CHORUSING", 61, 462, 561, "plain"),   // see layout comment above
       ]},
       { row: 1, label: "Reverb time", params: [
         p(0, "RT LOW",   67, 496, 527, "rtime"),
@@ -193,7 +216,7 @@
         p(2, "DEFINITION", 83, 462, 561, "plain"),
       ]},
       { row: 3, label: "Reflection levels", params: [
-        p(0, "REFL LVL MSTR", 85, 472, 547, "signed", { dispMin: -35, dispMax: 35 }),
+        p(0, "REFL LVL MSTR", 85, 477, 547, "signed", { dispMin: -35, dispMax: 35 }),
         p(1, "REFL L1", 87, 495, 530, "level"),
         p(2, "REFL L2", 89, 495, 530, "level"),
         p(3, "REFL L3", 91, 495, 530, "level"),
@@ -202,13 +225,13 @@
         p(6, "REFL R3", 97, 495, 530, "level"),
       ]},
       { row: 4, label: "Reflection delays", params: [
-        p(0, "REFL DLY MSTR", 99, 206, 818, "signed", { dispMin: -306, dispMax: 306, unit: "ms" }),
-        p(1, "REFL L1", 101, 400, 624, "delay"),
-        p(2, "REFL L2", 103, 400, 624, "delay"),
-        p(3, "REFL L3", 105, 400, 624, "delay"),
-        p(4, "REFL R1", 107, 400, 624, "delay"),
-        p(5, "REFL R2", 109, 400, 624, "delay"),
-        p(6, "REFL R3", 111, 400, 624, "delay"),
+        p(0, "REFL DLY MSTR", 99, 94, 706, "signed", { dispMin: -306, dispMax: 306, unit: "ms" }),
+        p(1, "REFL L1", 101, 512, 736, "delay"),
+        p(2, "REFL L2", 103, 512, 736, "delay"),
+        p(3, "REFL L3", 105, 512, 736, "delay"),
+        p(4, "REFL R1", 107, 512, 736, "delay"),
+        p(5, "REFL R2", 109, 512, 736, "delay"),
+        p(6, "REFL R3", 111, 512, 736, "delay"),
       ]},
     ],
 

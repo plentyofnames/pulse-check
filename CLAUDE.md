@@ -4,12 +4,15 @@ Web-based editor/librarian for the Lexicon PCM 70 digital effects processor. Van
 JS + Web MIDI, no build step, single-page — sibling project to `../Lexicon Reflex
 Editor` (same stack, reuse its MIDI plumbing patterns).
 
-**Target hardware runs software V2.0.** Both manuals are on hand: `lexicon_pcm70.pdf`
-(V2.0, MIDI data in ch. 8) and `PCM70-OM_original.pdf` (V3.00, ch. 6). V2.0's sysex
-framing + bulk layout are identical to V3.00, but it has no type 14 (Inverse Room) and
-no MIDI-clock source — gated via `FIRMWARE` in `pcm70-data.js`. The per-program
-parameter tables still hold V3.00 values and differ from V2.0 in places (Concert Hall
-proven); re-transcription to V2.0 is tracked in `HARDWARE-NOTES.md`.
+**Target hardware runs software V2.0** (a 3.0.1 ROM upgrade is planned — see
+IMPLEMENTATION.md "Firmware 3.0.1 support"). Both manuals are on hand:
+`lexicon_pcm70.pdf` (V2.0, MIDI data in ch. 8) and `PCM70-OM_original.pdf` (V3.00,
+ch. 6). V2.0's sysex framing + bulk layout are identical to V3.00; V2.0 has no type 14
+(Inverse Room) and no MIDI-clock source — gated via `FIRMWARE` in `pcm70-data.js`.
+The parameter tables are reconciled to V2.0 **and hardware-calibrated** — both
+manuals misprint layouts and ranges; `HARDWARE-NOTES.md` is the ledger of what is
+proven vs. hypothesis, and every loaded dump is audited against the tables (console
+"⚠ audit" lines + raw-words log). Trust a real dump over either manual.
 
 **Start here: `IMPLEMENTATION.md`** — full plan: architecture guidelines, sysex
 protocol reference, state model, code structure with schemas, milestone task list

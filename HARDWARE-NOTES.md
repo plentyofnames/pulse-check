@@ -30,11 +30,25 @@ transcribed from V3.00 and are being reconciled to V2.0.
 
 All six V2.0 tables were diffed against the V3.00 data. Only two layouts differed:
 
-- **Chorus and Echo (Table 4)**: V2.0 orders row 0 naturally — CHORUS at word 4
-  (byte 55), DIFFUSION at word 6 (byte 59). V3.00 had swapped those two words. Fixed.
-- **Concert Hall (Table 7)**: V2.0 has **DCY OPT at word 7 and no CHORUSING param**
-  (V3.00 added CHORUSING at word 7 and pushed DCY OPT to word 8), and **7 reflection
-  levels** (words 19–25) where V3.00 had 5 (words 24–25 unused). Both fixed.
+- **Chorus and Echo (Table 4)**: ~~V2.0 orders row 0 naturally — CHORUS at word 4
+  (byte 55), DIFFUSION at word 6 (byte 59). V3.00 had swapped those two words.~~
+  **REFUTED ON HARDWARE 2026-07-14.** A real V2.0 preset dump (0.7 PSYCHO ECHOES)
+  had byte55 = 527 — impossible for CHORUS (max 518), a plausible DIFFUSION (65) —
+  and byte59 = 518, which is exactly CHORUS 6VC T. The dump layout follows the
+  **V3.00** order (DIFFUSION@55, HC@57, CHORUS@59); the V2.0 print is another
+  misprint. Data reverted. The byte57 (HC) mystery is resolved — see
+  "table lookups clamp" below.
+- **Concert Hall (Table 7)**: ~~V2.0 has DCY OPT at word 7 and no CHORUSING param,
+  and 7 reflection levels.~~ **REFUTED 2026-07-17** by two independent sources:
+  a real Concert Hall dump had raw 400 (non-level garbage) at byte 97, and the
+  V2.0 manual's own ch. 4 parameter matrix (Table 4.4, pp. 4-2/4-3) shows
+  CHORUSING at 0.8, DECAY OPT at 0.7, only 4 reflection levels (3.5/3.6 = N/A)
+  and 4 reflection delays. The ch. 8 print was wrong again. Layout now follows
+  V3.00 bytes with V2.0's param set: DCY OPT param 7 @ byte 63, CHORUSING
+  param 8 @ byte 61 (the V3.00 cross — if a future dump audit flags 0.7
+  DCY OPT out of range, swap those two bytes), levels MSTR+L1/L2/R1/R2
+  (85–93), delays MSTR+L1/L2/R1/R2 (99–107); bytes 95/97/109/111 unused on
+  V2.0 (V3.00 uses 109/111 for its extra R2/R3 delays).
 - **Multiband (5), Resonant Chords (6), Rich Chamber/Plate (8), Infinite (9)**: byte-
   for-byte identical to what we had — no change.
 - **Size constants (p. 8-14)** match our `sizeParams` exactly (Concert Hall 5/444/164/
@@ -50,6 +64,32 @@ All six V2.0 tables were diffed against the V3.00 data. Only two layouts differe
 - **Param#/Byte# columns** in the reverb tables are shifted one row (rows print 10.., 20..,
   30.. instead of 20.., 30.., 40..) and row-4 Byte# overlaps row 3. We follow byte order
   + Table 1's `10*row+col` rule instead.
+- **Frequency display anchor**: the manuals' "value = raw − low limit" into Table 13
+  contradicts the printed display ranges for params with rawMin 497 (Concert Hall
+  XOVER/HC etc. print 170 Hz minimum, but value 0 would be 0 Hz). Table 13 is anchored
+  at **raw 496 = entry 0** for all freq params (`Convert.FREQ_BASE`); rawMin-497 params
+  then start at entry 1 = 170 Hz, matching their printed ranges.
+- The editor **audits every loaded dump** and logs words outside our limits
+  ("⚠ audit …" console lines) — this is how the Concert Hall and Chorus & Echo
+  ch. 8 misprints were caught. Trust ch. 4's parameter matrices over ch. 8's
+  byte tables when they disagree; trust a real dump over both.
+
+### Test plan for the next hardware session
+
+- [ ] **Sweep unit** (Registers tab): all 50 stored dumps arrive, 30 ms pacing holds,
+      names look right. Then **Backup (.syx)** and keep the file (pre-experiment
+      safety copy of whatever is on the unit).
+- [ ] **Store with verify**: store the working copy into an unused register — expect
+      "✓ stored and verified". Also try with M PROTECT on to see the failure path.
+- [ ] **Patch live-sync**: with auto-send on, change a patch source/destination/scale
+      in the editor, then check 5.x on the panel — params 60–89 are documented but
+      this is their first live use.
+- [ ] **BPM displays** (load a Rhythm program, e.g. 0.8 ECHOES BPM): voice delays
+      should read n/24 beat and match the panel; RATE BPM shows "rate n" — note the
+      panel's BPM for a few raw steps so the mapping can be calibrated.
+- [ ] **Approximate curves**: Infinite Reverb REV TIME and Resonant Chords voice
+      predelay use linear approximations — compare a few editor values against the
+      panel and note deviations.
 
 ### Still to confirm on hardware
 - [ ] **BPM-variant limits** (types 11–13): the `bpm` master/voice overrides (448–575 /
@@ -59,12 +99,90 @@ All six V2.0 tables were diffed against the V3.00 data. Only two layouts differe
       layout and DCY OPT word (the V2.0 table page had the printing errors noted above).
 
 ## Protocol behaviour (from M4 onward)
-- [ ] Active dump request (`60`) returns the running program.
+- [x] Active dump request (`60`) returns the running program.
 - [ ] Stored dump request (`61`, reg 0–49) returns a register; 30 ms pacing holds.
-- [ ] Parameter-change sysex audibly moves the active buffer.
+- [x] Parameter-change sysex changes the active buffer — confirmed 2026-07-17
+      (editor edits show up on the unit's panel, e.g. the DCY OPT toggle at 0.7;
+      master drags demonstrably rewrite voice words).
 - [ ] Store-to-register + verify readback; M PROTECT behaviour.
-- [ ] Program Change loads registers.
+- [ ] Program Change loads presets/registers — **requires 1.2 PGM CHNG = FIX in
+      Control Program 7.0 on the unit** (OFF = PCs silently ignored). The editor
+      now waits `PC_LOAD_DELAY_MS` (400 ms, tunable in index.html) after sending
+      a PC before requesting the dump, and verifies the returned dump's matrix
+      position against the requested preset (retries once, then loads whatever
+      the unit actually runs and says so in the console). If preset loads still
+      return the *old* program, raise the delay.
+- [x] ~~Bulk dump byte 1/2 (matrix row/col) reflects the loaded preset's position~~
+      **REFUTED 2026-07-17**: after loading preset 3.0 via PC 80, the active dump's
+      bytes 1/2 read 0.0. They do not identify the loaded program — the editor now
+      verifies preset loads by NAME (bytes 3–16) with program type as fallback.
+- [x] DCY OPT byte position **confirmed 2026-07-17**: toggling DCY OPT in the editor
+      moves 0.7 on the unit — so the V3.00 byte/param cross holds on V2.0:
+      DCY OPT param 7 @ byte 63, CHORUSING param 8 @ byte 61.
 
 ## Confirmed on hardware
 
-_(nothing yet — awaiting first session with the unit)_
+- **2026-07-17 — Parameter-change sysex puts the unit into parameter mode, and in
+  that state it IGNORES MIDI Program Changes.** (Panel: all key LEDs off, display
+  shows the last-changed parameter.) Loading works again after the unit receives
+  an active bulk dump (Put → panel shows REG mode), or after pressing PGM on the
+  front panel. Since the editor cannot see the panel's mode (the user may press
+  PGM/REG themselves), it sends a Put unconditionally before every preset
+  Program Change. Beware in logs: a PC ignored this way
+  makes the follow-up dump return the *old edited buffer* — which can look like a
+  successful load if only the name is checked.
+- **2026-07-17 — Masters rewrite their voice words.** Dragging a master (with
+  live param sends) made the unit rewrite all four voice words of that row to
+  one clamped value (raw 420 ×4) — the stored voice values are not independent
+  of the master. Also the key evidence for the row-3/4 byte swap below.
+- **2026-07-17 — Concert Hall rows 3/4 RESOLVED by panel-vs-dump comparison**
+  (factory 3.0: dump bytes 85=512, 87–93=495×4, 99=400, 101/103=495,
+  105/107=512; panel: 3.0=0, 3.1–3.4=OFF, 4.0=0, 4.1–4.4=000ms, L3/R3 present
+  in both rows):
+  - Layout = the V2.0 ch8 print after all: **levels 85–97, delays 99–111,
+    7-wide** (an earlier "delays at 87–93" swap inference was wrong, see next
+    bullet). The ch4 matrix's N/A at 3.5/3.6/4.5/4.6 was a misprint — the
+    panel has L3/R3 in both rows.
+  - Hardware zero points: LVL MSTR 0 @ raw 512 → range **477–547** (printed
+    472 misprinted); DLY MSTR 0 @ raw **400** → range 94–706 (centered on 400,
+    not 512!); delay voices 000 ms @ raw **512** → range 512–736 (raw 495 also
+    shows 000 via clamping). The two delay ranges are PROVISIONAL — confirm by
+    setting 4.0/4.1 to known values on the panel and watching which raw values
+    arrive.
+- **2026-07-17 — Rich Chamber (type 8) layout & ranges confirmed as printed**
+  (Table 8, identical V2.0↔V3.00): panel 4.1 REFL L1 set to 408 ms (and 400 ms)
+  round-trips through the dump and displays identically in the editor — so its
+  reflection delays anchor at raw 400 as printed, and a fresh 4.0 RICH CHAMBER
+  load shows panel and app in full agreement. The Concert Hall zero-point
+  anomalies (DLY MSTR centered at 400, delay voices at 512) are therefore
+  Concert-Hall-specific, NOT a reverb-family convention. Rich Plate and
+  Infinite Reverb share this layout family and presumably its correctness
+  (spot-check on first use).
+- **2026-07-17 — The firmware stores out-of-range parameter bytes.** Factory
+  3.0 ships raw 400 in a level slot (R3) and raw 495 in delay slots; a master
+  drag rewrites voice words by raw delta (level voices 495 → 420 after a −75
+  master move), sailing below the legal floor. The panel (and now the editor)
+  clamps only the *display*. Consequences: audit lines on factory programs are
+  expected and truthful, and **value-range arguments alone cannot identify a
+  byte's parameter** — that's what invalidated the earlier swap inference.
+  Only panel-vs-dump comparison is conclusive.
+- **2026-07-17 — Active-dump bytes 1/2 are the panel's matrix cursor, not the
+  loaded program's identity** (read 0.0 after one 3.0 load, 3.0 after another).
+
+- **2026-07-14 — Active dump request/parse works** (`60`, reg 50): Get returns a
+  bulk dump that decodes to the correct program type and name, checksum OK. So
+  the F0 06 00 framing, nybble pairs, 7-bit sumcheck, and 167-byte layout are
+  right on V2.0 hardware.
+- **2026-07-14 — Preset loading via Program Change works** (PC 50+row*10+col,
+  then delayed active-dump fetch): 0.7 PSYCHO ECHOES loaded with correct name
+  and type. The PC→preset mapping and the matrix-position bytes (1–2) behave
+  as the manuals claim.
+- **2026-07-14 — Chorus & Echo dump layout = V3.00 order** (see refutation above).
+- **2026-07-14 — Table lookups clamp at the table ends.** PSYCHO ECHOES stores
+  HC = raw **552**, far beyond the printed 496–527 range, and the unit's front
+  panel displays plain "15.0 kHz" (the table's last entry). So the manuals'
+  printed raw ranges are the *editable* ranges; factory presets store values
+  beyond them and the firmware saturates the display lookup. `Convert._tbl`
+  mirrors this for freq/level/rtime/pitch/chorusMode; the editor still shows
+  such values amber and logs them in the dump audit. Editing one snaps it into
+  the printed range (that is also what the front panel would do).

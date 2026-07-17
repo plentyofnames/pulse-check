@@ -118,6 +118,7 @@
     background: var(--ink-soft);
   }
   .led.ok { background: var(--led-ok); box-shadow: 0 0 6px var(--led-ok); }
+  .led.warn { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
   .led.bad { background: var(--led-bad); box-shadow: 0 0 6px var(--led-bad); }
   .led-field span.txt { font-size: 11px; color: var(--ink-soft); }
 
@@ -174,7 +175,7 @@
   .lib-tabs button.on { background: var(--panel); color: var(--ink); border-color: var(--line); }
   .lib-list { list-style: none; margin: 0; padding: 6px; border-top: 1px solid var(--line-soft); max-height: 460px; overflow-y: auto; }
   .lib-list li {
-    display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 6px;
+    display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto; align-items: center; gap: 6px;
     padding: 5px 8px; border-radius: 4px; cursor: pointer;
   }
   .lib-list li:hover { background: var(--panel-2); }
@@ -187,6 +188,15 @@
     color: var(--ink-soft); border: 1px solid var(--line); border-radius: 3px; padding: 1px 4px;
   }
   .lib-list .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); justify-self: end; }
+  .lib-list .nm.dim { color: var(--ink-soft); font-style: italic; }
+  .lib-list .rowact { display: none; gap: 4px; }
+  .lib-list li:hover .rowact { display: inline-flex; }
+  .lib-list li:has(.rowact):hover .type { display: none; }
+  .rowact button {
+    font: inherit; font-size: 10px; padding: 1px 5px; border-radius: 3px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink); white-space: nowrap;
+  }
+  .rowact button:hover { background: var(--accent-soft); color: var(--accent); }
   .lib-foot { padding: 8px; border-top: 1px solid var(--line-soft); display: flex; gap: 6px; }
   .lib-foot .btn { flex: 1; padding: 6px 4px; font-size: 10.5px; font-weight: 600; }
   .lib-empty { padding: 24px 12px; text-align: center; color: var(--ink-soft); font-size: 11.5px; }
@@ -331,7 +341,7 @@
     color: var(--vfd-ink);
     opacity: 0.92;
     display: flex; flex-direction: column; gap: 3px;
-    max-height: 140px; overflow-y: auto;
+    max-height: 140px; overflow-y: auto; overflow-x: auto;
   }
   .console .line { display: flex; gap: 12px; white-space: nowrap; }
   .console .dir { opacity: 0.55; width: 20px; flex: none; }
@@ -400,18 +410,17 @@
         <li class="lib-empty">Not connected.</li>
       </ul>
       <div class="lib-foot">
-        <button class="btn" id="btnBackup">Backup all (.syx)</button>
-        <button class="btn" id="btnImport">Import</button>
+        <button class="btn" id="btnSweep">Sweep unit</button>
+        <button class="btn" id="btnBackup">Backup (.syx)</button>
+        <button class="btn" id="btnSaveLib">Save current</button>
+        <button class="btn" id="btnImport">Import .syx</button>
+        <input type="file" id="importFile" accept=".syx" multiple hidden>
       </div>
     </aside>
 
     <!-- program editor -->
     <section class="panel">
       <div class="prog-head">
-        <div class="field">
-          <label for="progSel">Program</label>
-          <select id="progSel"></select>
-        </div>
         <div class="field">
           <label for="progName">Register name</label>
           <span class="name-wrap">
@@ -475,7 +484,9 @@ const { Sysex, Codec, Convert } = window.PCM70CORE;
 // Web MIDI: the ONLY place bytes enter/leave the app. One paced send queue with
 // per-key trailing coalescing (knob drags collapse to their latest value); one
 // pending-request slot (the Reflex pattern, promisified) for dump replies.
-const SEND_INTERVAL_MS = 30; // manual floor between stored bulk msgs; single tunable
+const SEND_INTERVAL_MS = 30;   // manual floor between stored bulk msgs; single tunable
+const PC_LOAD_DELAY_MS = 400;  // grace after a Program Change before requesting a dump
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const Midi = {
   access: null,
@@ -666,11 +677,10 @@ const Store = {
     this.dirty = true;
     this._emit({ type: "name" });
   },
-  setType(type) {                            // swap algorithm; words reinterpreted
-    this.prog.type = type;
-    this.dirty = true;
-    this._emit({ type: "program" });
-  },
+  // NOTE: there is deliberately no setType. The hardware has no "change
+  // algorithm" operation — the program type only exists as byte 0 of a bulk
+  // dump — so the algorithm chip is display-only and switching algorithms
+  // means loading a preset (or register) built on the one you want.
 
   // A neutral starting program (midpoint of every param's range).
   makeDefault(type = 7) {
@@ -734,9 +744,8 @@ const UI = {
   setConnState(kind, text) {
     // kind: "ok" (green) | "warn" (partial, red) | "bad" (red) | "" (neutral)
     const led = document.getElementById("connLed");
-    led.classList.remove("ok", "bad");
-    if (kind === "ok") led.classList.add("ok");
-    else if (kind === "warn" || kind === "bad") led.classList.add("bad");
+    led.classList.remove("ok", "warn", "bad");
+    if (kind === "ok" || kind === "warn" || kind === "bad") led.classList.add(kind);
     document.getElementById("connTxt").textContent = text;
   },
 
@@ -779,6 +788,7 @@ const UI = {
     });
     document.getElementById("btnPut").addEventListener("click", () => {
       if (!Midi.out) { Log.info("Put: no MIDI out selected."); return; }
+      if (this.blockV3Send()) return;
       const data = Codec.encodeProgram(Store.prog);
       Midi.enqueue(Sysex.buildBulkData(Midi.channel(), { stored: false, reg: 50, data167: data }));
       Log.info("Put: sent working copy to active buffer.");
@@ -790,35 +800,94 @@ const UI = {
   applyDump(parsed, origin) {
     if (Store.dirty && !window.confirm("Discard unsaved edits and load this program?")) return false;
     Store.replaceProgram(Codec.decodeProgram(parsed.data167), { origin, dirty: false });
+    this.auditProgram();
     return true;
   },
 
-  // Load a factory preset. Online: Program Change (unit auto-loads) → Get the
-  // active dump so the working copy holds the real preset values. Offline:
-  // preview the preset's algorithm + name.
-  async loadPreset(p) {
-    if (Store.dirty && !window.confirm(`Discard edits and load preset ${p.num} ${p.name}?`)) {
-      this.renderProgramSelect(); // revert the dropdown to the current program
-      return;
+  // Log every word of a freshly-loaded dump that falls outside our transcribed
+  // limits. Real dumps are the ground truth — anything logged here is either a
+  // layout/limit error in our tables (fix pcm70-data.js, note it in
+  // HARDWARE-NOTES.md) or a size-clamped value the hardware itself flags.
+  auditProgram() {
+    const ctx = Store.ctx();
+    for (const meta of Store.metas()) {
+      const raw = Store.prog.words[meta.word];
+      const lim = Convert.limitsFor(meta, ctx);
+      if (raw < lim.rawMin || raw > lim.rawMax) {
+        Log.info(`⚠ audit ${meta.row}.${meta.col} ${meta.name}: raw ${raw} outside ${lim.rawMin}–${lim.rawMax}`);
+      }
     }
+    // Raw word dump (byte = 47 + 2*word). Panel-vs-dump comparison is the only
+    // conclusive way to map bytes to parameters — keep this visible while the
+    // layouts are still being hardware-verified.
+    const w = Store.prog.words;
+    for (let r = 0; r < 6; r++) {
+      Log.info(`words ${r * 10}–${r * 10 + 9}: ` +
+        Array.from(w.slice(r * 10, r * 10 + 10)).join(" "));
+    }
+  },
+
+  // Load a factory preset. Online: Program Change (the unit loads it even with
+  // AUTOLOAD off, manual 5-3) → wait out the load (audio mutes; the old CPU
+  // needs real time) → Get the active dump. The dump is authoritative; its
+  // matrix position tells us whether the Program Change was honored.
+  async loadPreset(p) {
+    if (Store.dirty && !window.confirm(`Discard edits and load preset ${p.num} ${p.name}?`)) return;
     const origin = { kind: "preset", id: p.num };
-    if (Midi.out && Midi.in) {
-      Midi.sendNow(new Uint8Array([0xc0 | Midi.channel(), p.pc & 0x7f])); // Program Change
-      Log.info(`Preset ${p.num} ${p.name}: Program Change ${p.pc} sent, fetching…`);
-      try {
-        const reply = await Midi.request(Sysex.buildDumpRequest(Midi.channel(), { stored: false, reg: 50 }),
-          { match: (m) => m.kind === "bulk" && !m.stored, timeoutMs: 1500, retries: 1 });
-        if (reply.checksumOk && reply.data167) {
-          Store.replaceProgram(Codec.decodeProgram(reply.data167), { origin, dirty: false });
-          Log.info(`Loaded preset ${p.num} ${p.name} (${Store.typeInfo().name}).`);
-        } else { Log.info("Preset dump checksum failed — not loaded."); this.renderProgramSelect(); }
-      } catch (e) { Log.info("Preset load failed: " + e.message); this.renderProgramSelect(); }
-    } else {
+
+    if (!(Midi.out && Midi.in)) {
       const prog = Store.makeDefault(p.type);
       prog.name = p.name.slice(0, 13);
       prog.matrixPos = { row: p.row, col: p.col };
       Store.replaceProgram(prog, { origin, dirty: false });
       Log.info(`Preview preset ${p.num} ${p.name} (offline — connect MIDI to load real values).`);
+      return;
+    }
+
+    // In parameter mode the unit IGNORES Program Changes, and the editor cannot
+    // see the panel's mode (front-panel keys, our own live edits, …). An active
+    // bulk dump (Put) always knocks it back into a loadable state (observed on
+    // hardware), so send one unconditionally before every Program Change.
+    if (!this.blockV3Send()) {
+      Log.info("Sending Put to ensure a loadable state…");
+      Midi.sendNow(Sysex.buildBulkData(Midi.channel(), { stored: false, reg: 50, data167: Codec.encodeProgram(Store.prog) }));
+      await sleep(300); // ~110 ms wire time for 343 bytes + processing headroom
+    }
+    Midi.sendNow(new Uint8Array([0xc0 | Midi.channel(), p.pc & 0x7f])); // Program Change
+    Log.info(`Preset ${p.num} ${p.name}: Program Change ${p.pc} sent, waiting for the unit to load…`);
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      await sleep(PC_LOAD_DELAY_MS * attempt);
+      let reply;
+      try {
+        reply = await Midi.request(Sysex.buildDumpRequest(Midi.channel(), { stored: false, reg: 50 }),
+          { match: (m) => m.kind === "bulk" && !m.stored, timeoutMs: 1500, retries: 1 });
+      } catch (e) {
+        Log.info(`Preset load: no dump reply (${e.message}). Check MIDI wiring and that the unit is on channel ${Midi.channel() + 1}.`);
+        return;
+      }
+      if (!(reply.checksumOk && reply.data167)) { Log.info("Preset dump checksum failed — not loaded."); return; }
+      const prog = Codec.decodeProgram(reply.data167);
+      // Verify by NAME (and program type as fallback) — NOT by the dump's
+      // matrix-position bytes 1–2: hardware showed those read 0.0 after loading
+      // preset 3.0 (2026-07-17), so they don't identify the loaded program.
+      const nameMatch = prog.name.trim().toUpperCase() === p.name.trim().toUpperCase();
+      const typeMatch = prog.type === p.type;
+      if (!nameMatch && !typeMatch && attempt === 1) {
+        Log.info(`Dump still shows "${prog.name.trim()}" — giving the unit more time…`);
+        continue;
+      }
+      // Load whatever the unit actually runs (it is the truth), but say so.
+      Store.replaceProgram(prog, { origin: (nameMatch || typeMatch) ? origin : { kind: "scratch", id: null }, dirty: false });
+      this.auditProgram();
+      if (nameMatch) {
+        Log.info(`Loaded preset ${p.num} ${p.name} (${Store.typeInfo().name}).`);
+      } else if (typeMatch) {
+        Log.info(`Loaded "${prog.name.trim()}" — right algorithm for ${p.num}, but the name differs from our preset table ("${p.name}"). If the unit's name is correct, fix PRESETS in pcm70-data.js.`);
+      } else {
+        Log.info(`⚠ Unit returned "${prog.name.trim()}" (${Store.typeInfo().name}) instead of ${p.num} ${p.name} — ` +
+          `Program Change ignored or mapped differently. On the unit: load Control Program 7.0, set 1.2 PGM CHNG to FIX.`);
+      }
+      return;
     }
   },
 
@@ -831,14 +900,39 @@ const UI = {
     document.querySelectorAll("#libTabs button").forEach((b) => {
       b.addEventListener("click", () => { this._libTab = b.dataset.tab; this.renderLibrarian(); });
     });
+    document.getElementById("btnSweep").addEventListener("click", () => Librarian.sweep());
+    document.getElementById("btnBackup").addEventListener("click", () => Librarian.backup());
+    document.getElementById("btnSaveLib").addEventListener("click", () => Librarian.saveCurrent());
+    const fileInput = document.getElementById("importFile");
+    document.getElementById("btnImport").addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", async () => {
+      for (const f of fileInput.files) Librarian.importBuffer(await f.arrayBuffer(), f.name);
+      fileInput.value = "";
+    });
     this.renderLibrarian();
+  },
+
+  // Sending an Inverse Room program to a V2.0 unit crashes it (manual 5-2).
+  blockV3Send() {
+    if (Store.prog.type === 14 && DATA.FIRMWARE < 3) {
+      Log.info("⚠ Inverse Room (type 14) programs crash V2.0 units — send blocked.");
+      return true;
+    }
+    return false;
   },
 
   renderLibrarian() {
     const tab = this._libTab || "presets";
     document.querySelectorAll("#libTabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+    const show = (id, on) => { document.getElementById(id).style.display = on ? "" : "none"; };
+    show("btnSweep", tab === "registers");
+    show("btnBackup", tab === "registers");
+    show("btnSaveLib", tab === "library");
+    show("btnImport", tab === "library");
+    document.getElementById("btnSweep").disabled = Librarian.sweeping;
     const list = document.getElementById("libList");
     list.innerHTML = "";
+
     if (tab === "presets") {
       for (const p of DATA.PRESETS) {
         const li = this._el("li");
@@ -852,13 +946,135 @@ const UI = {
         li.addEventListener("click", () => this.loadPreset(p));
         list.appendChild(li);
       }
-    } else {
-      const li = this._el("li", "lib-empty",
-        tab === "registers"
-          ? "Register sweep arrives in M5. Use Get for the unit's active program."
-          : "Browser library arrives in M5.");
-      li.style.display = "block";
+      return;
+    }
+
+    if (tab === "registers") {
+      for (let i = 0; i < 50; i++) {
+        const info = Librarian.regInfo(i);
+        const li = this._el("li");
+        if (Store.origin.kind === "register" && Store.origin.id === i) li.classList.add("on");
+        const nm = this._el("span", info ? "nm" : "nm dim",
+          info ? (info.empty ? "—" : info.prog.name.trim()) : "not read");
+        li.append(this._el("span", "num", Librarian.regLabel(i)), nm,
+          this._el("span", "type", info ? (info.empty ? "Empty" : (this._typeChip[info.prog.type] || "?")) : "·"));
+        const act = this._el("span", "rowact");
+        const st = this._el("button", null, "⤓ store");
+        st.title = `Store the working copy into register ${Librarian.regLabel(i)}`;
+        st.addEventListener("click", (e) => { e.stopPropagation(); Librarian.storeToRegister(i); });
+        act.appendChild(st);
+        li.appendChild(act);
+        li.addEventListener("click", () => this.loadRegister(i));
+        list.appendChild(li);
+      }
+      return;
+    }
+
+    // library
+    if (!Librarian.lib.length) {
+      list.appendChild(this._el("li", "lib-empty", "Library is empty — Save current, or Import a .syx bank."));
+      return;
+    }
+    for (const entry of Librarian.lib) {
+      const li = this._el("li");
+      if (Store.origin.kind === "library" && Store.origin.id === entry.id) li.classList.add("on");
+      li.append(this._el("span", "num", ""),
+        this._el("span", "nm", entry.name),
+        this._el("span", "type", this._typeChip[entry.type] || "?"));
+      if (entry.src) li.title = "Imported from " + entry.src;
+      const act = this._el("span", "rowact");
+      const rn = this._el("button", null, "✎");
+      rn.title = "Rename";
+      rn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const name = window.prompt("Library entry name:", entry.name);
+        if (name != null && name.trim()) {
+          entry.name = name.trim().toUpperCase().slice(0, 13);
+          Librarian._saveLib();
+          this.renderLibrarian();
+        }
+      });
+      const del = this._el("button", null, "✕");
+      del.title = "Delete";
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (window.confirm(`Delete "${entry.name}" from the library?`)) {
+          Librarian.lib = Librarian.lib.filter(x => x.id !== entry.id);
+          Librarian._saveLib();
+          this.renderLibrarian();
+        }
+      });
+      act.append(rn, del);
+      li.appendChild(act);
+      li.addEventListener("click", () => this.loadLibrary(entry));
       list.appendChild(li);
+    }
+  },
+
+  // Load a hardware register: audibly on the unit (PC 0–49 + Get) when
+  // connected, from the cache when offline.
+  async loadRegister(i) {
+    const label = Librarian.regLabel(i);
+    const info = Librarian.regInfo(i);
+    if (info && info.empty) { Log.info(`Register ${label} is empty.`); return; }
+    if (Store.dirty && !window.confirm(`Discard edits and load register ${label}?`)) return;
+    const origin = { kind: "register", id: i };
+
+    if (!(Midi.out && Midi.in)) {
+      if (!info) { Log.info(`Register ${label} not cached — connect MIDI and sweep.`); return; }
+      Store.replaceProgram(Codec.decodeProgram(Librarian.regs[i].data), { origin, dirty: false });
+      this.auditProgram();
+      Log.info(`Opened cached register ${label} (offline).`);
+      return;
+    }
+
+    if (!this.blockV3Send()) {
+      Log.info("Sending Put to ensure a loadable state…");
+      Midi.sendNow(Sysex.buildBulkData(Midi.channel(), { stored: false, reg: 50, data167: Codec.encodeProgram(Store.prog) }));
+      await sleep(300);
+    }
+    Midi.sendNow(new Uint8Array([0xc0 | Midi.channel(), i & 0x7f]));
+    Log.info(`Register ${label}: Program Change ${i} sent, waiting for the unit to load…`);
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      await sleep(PC_LOAD_DELAY_MS * attempt);
+      let reply;
+      try {
+        reply = await Midi.request(Sysex.buildDumpRequest(Midi.channel(), { stored: false, reg: 50 }),
+          { match: (m) => m.kind === "bulk" && !m.stored, timeoutMs: 1500, retries: 1 });
+      } catch (e) { Log.info(`Register load: no dump reply (${e.message}).`); return; }
+      if (!(reply.checksumOk && reply.data167)) { Log.info("Register dump checksum failed — not loaded."); return; }
+      const prog = Codec.decodeProgram(reply.data167);
+      const expect = info ? info.prog.name.trim().toUpperCase() : null;
+      const match = expect == null || prog.name.trim().toUpperCase() === expect;
+      if (!match && attempt === 1) {
+        Log.info(`Dump still shows "${prog.name.trim()}" — giving the unit more time…`);
+        continue;
+      }
+      Store.replaceProgram(prog, { origin: match ? origin : { kind: "scratch", id: null }, dirty: false });
+      this.auditProgram();
+      if (match) {
+        Librarian.regs[i] = { data: reply.data167, ts: Date.now() };
+        Librarian._saveRegs();
+        Log.info(`Loaded register ${label} "${prog.name.trim()}" (${Store.typeInfo().name}).`);
+      } else {
+        Log.info(`⚠ Unit returned "${prog.name.trim()}" instead of register ${label} ("${expect}").`);
+      }
+      return;
+    }
+  },
+
+  // Load a library entry into the editor and (editor-is-master) push it to the
+  // unit's active buffer so it is audible.
+  loadLibrary(entry) {
+    if (Store.dirty && !window.confirm(`Discard edits and load "${entry.name}"?`)) return;
+    const prog = Codec.decodeProgram(Librarian._fromB64(entry.b64));
+    Store.replaceProgram(prog, { origin: { kind: "library", id: entry.id }, dirty: false });
+    this.auditProgram();
+    if (Midi.out && !this.blockV3Send()) {
+      Midi.enqueue(Sysex.buildBulkData(Midi.channel(), { stored: false, reg: 50, data167: Codec.encodeProgram(Store.prog) }));
+      Log.info(`Loaded "${entry.name}" from the library and sent it to the unit.`);
+    } else {
+      Log.info(`Loaded "${entry.name}" from the library.`);
     }
   },
 
@@ -874,7 +1090,17 @@ const UI = {
     switch (change.type) {
       case "program": this.renderAll(); break;
       case "param":   this.refreshCells(); break;
-      case "patch":   /* patch selects already reflect their own value */ break;
+      case "patch": {
+        // Patches are ordinary sysex params: sources 60–69, destinations
+        // 70–79, scale factors 80–89 (Table 1) — live-sync them too.
+        if (this._autoSend() && Midi.out) {
+          const i = change.index, pt = Store.prog.patches[i];
+          Midi.enqueue(Sysex.buildParamChange(Midi.channel(), 60 + i, pt.src), { coalesceKey: "psrc:" + i });
+          Midi.enqueue(Sysex.buildParamChange(Midi.channel(), 70 + i, pt.dest), { coalesceKey: "pdst:" + i });
+          Midi.enqueue(Sysex.buildParamChange(Midi.channel(), 80 + i, Codec.scaleFromSigned(pt.scale)), { coalesceKey: "pscl:" + i });
+        }
+        break;
+      }
       case "name":    break;
     }
     this.renderVfd();
@@ -889,7 +1115,6 @@ const UI = {
   _autoSend() { return document.getElementById("autoSend").classList.contains("on"); },
 
   renderAll() {
-    this.renderProgramSelect();
     this.renderProgHeader();
     this.renderParams();
     this.renderPatchBay();
@@ -903,29 +1128,11 @@ const UI = {
     if (!Store.prog) return;
     const t = Store.typeInfo();
     const o = Store.origin;
-    const where = o.kind === "register" ? String(o.id)
+    const where = o.kind === "register" ? "R" + Librarian.regLabel(o.id)
       : o.kind === "preset" ? o.id
       : o.kind === "library" ? "LIB" : "SCRATCH";
     document.getElementById("vfdLine1").textContent = `${where}  ${Store.prog.name || ""}`;
     document.getElementById("vfdLine2").textContent = `${t.name.toUpperCase()}${Store.dirty ? "  · EDITED" : ""}`;
-  },
-
-  renderProgramSelect() {
-    // The program (algorithm) type of the working copy. Factory preset PROGRAMS
-    // live in the librarian's Presets tab; this picks the underlying algorithm.
-    const sel = document.getElementById("progSel");
-    const ids = DATA.availableTypes();
-    if (!ids.includes(Store.prog.type)) ids.push(Store.prog.type); // keep a loaded type visible
-    sel.innerHTML = "";
-    for (const id of ids) {
-      const o = this._el("option", null, DATA.PROGRAM_TYPES[id].name);
-      o.value = id; sel.appendChild(o);
-    }
-    if (!sel._wired) {
-      sel.addEventListener("change", () => Store.setType(parseInt(sel.value, 10)));
-      sel._wired = true;
-    }
-    sel.value = String(Store.prog.type);
   },
 
   renderProgHeader() {
@@ -1019,12 +1226,14 @@ const UI = {
       val.textContent = "";
       val.appendChild(input);
       input.focus(); input.select();
+      let done = false; // Enter commits and repaints, which then fires blur — run once
       const commit = () => {
+        if (done) return; done = true;
         const raw = Convert.fromDisplay(meta, input.value, Store.ctx());
         this._commit(meta, raw);
         paint();
       };
-      const cancel = () => paint();
+      const cancel = () => { if (done) return; done = true; paint(); };
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") { e.preventDefault(); commit(); }
         else if (e.key === "Escape") { e.preventDefault(); cancel(); }
@@ -1051,7 +1260,9 @@ const UI = {
 
   _destOptions() {
     // Destination = a parameter of the loaded program, labelled "row.col NAME".
-    const out = [[0, "—"]];
+    // No "off" placeholder: a patch is off via source = OFF, and dest 0 is a
+    // real destination (0.0 MIX).
+    const out = [];
     for (const g of Store.layout()) {
       for (const e of g.params) out.push([e.paramNum, `${g.row}.${e.col} ${e.name}`]);
     }
@@ -1078,6 +1289,12 @@ const UI = {
     // destination
     const dstSel = this._el("select");
     for (const [pn, label] of dests) { const o = this._el("option", null, label); o.value = pn; dstSel.appendChild(o); }
+    // A dump may carry a destination this layout doesn't have — keep it visible
+    // rather than silently misrendering as the first option.
+    if (!dests.some(([pn]) => pn === patch.dest)) {
+      const o = this._el("option", null, `${Math.floor(patch.dest / 10)}.${patch.dest % 10} (n/a)`);
+      o.value = patch.dest; dstSel.appendChild(o);
+    }
     dstSel.value = String(patch.dest);
     dstSel.addEventListener("change", () => this._commitPatch(i, { dest: parseInt(dstSel.value, 10) }));
     row.appendChild(dstSel);
@@ -1090,8 +1307,10 @@ const UI = {
     const setSv = (s) => { sv.value = (s > 0 ? "+" : "") + s; };
     setKnob(patch.scale); setSv(patch.scale);
     sv.addEventListener("change", () => {
-      let s = parseInt(sv.value, 10); if (!isFinite(s)) s = patch.scale;
-      s = Math.max(-128, Math.min(128, s)); if (s === 0) s = -128;
+      let s = parseInt(sv.value, 10); if (!isFinite(s)) s = Store.prog.patches[i].scale;
+      s = Math.max(-128, Math.min(128, s));
+      // the hardware encoding has no 0 — snap toward the previous sign
+      if (s === 0) s = Store.prog.patches[i].scale < 0 ? -1 : 1;
       this._commitPatch(i, { scale: s }); setKnob(s); setSv(s);
     });
     this._makeKnobDrag(knob, () => Store.prog.patches[i].scale, (s) => {
@@ -1120,7 +1339,8 @@ const UI = {
     knob.tabIndex = 0;
     knob.setAttribute("role", "slider");
     let startY = 0, startVal = 0, dragging = false;
-    const clamp = (s) => { s = Math.round(s); s = Math.max(-128, Math.min(128, s)); return s === 0 ? -128 : s; };
+    // No 0 in the hardware encoding; ±1 is the neutral crossing point.
+    const clamp = (s) => { s = Math.round(s); s = Math.max(-128, Math.min(128, s)); return s === 0 ? 1 : s; };
     const onMove = (e) => {
       if (!dragging) return;
       const fine = e.shiftKey ? 0.1 : 1;
@@ -1133,7 +1353,7 @@ const UI = {
       window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
     });
     knob.addEventListener("wheel", (e) => { e.preventDefault(); setVal(clamp(getVal() + (e.deltaY < 0 ? 1 : -1))); }, { passive: false });
-    knob.addEventListener("dblclick", () => setVal(-128));
+    knob.addEventListener("dblclick", () => setVal(1)); // reset to neutral (+1; encoding has no 0)
     knob.addEventListener("keydown", (e) => {
       if (e.key === "ArrowUp" || e.key === "ArrowRight") { e.preventDefault(); setVal(clamp(getVal() + (e.shiftKey ? 10 : 1))); }
       else if (e.key === "ArrowDown" || e.key === "ArrowLeft") { e.preventDefault(); setVal(clamp(getVal() - (e.shiftKey ? 10 : 1))); }
@@ -1142,7 +1362,174 @@ const UI = {
 };
 
 /* ---- 7. Librarian ----------------------------------------------------- */
-const Librarian = {};
+// Two stores: `regs` mirrors the unit's 50 hardware registers (filled by the
+// sweep or by unsolicited stored dumps, persisted so names survive reloads);
+// `lib` is the browser-side library (unlimited, localStorage + .syx files).
+const Librarian = {
+  regs: Array(50).fill(null),   // { data: Uint8Array(167), ts } | null
+  lib: [],                      // { id, name, type, ts, src?, b64 }
+  sweeping: false,
+
+  init() {
+    try {
+      const r = JSON.parse(localStorage.getItem("pcm70.regs") || "[]");
+      r.forEach((e, i) => { if (e && i < 50) this.regs[i] = { data: this._fromB64(e.d), ts: e.ts }; });
+    } catch (e) { /* corrupt cache — start empty */ }
+    try { this.lib = JSON.parse(localStorage.getItem("pcm70.lib") || "[]"); } catch (e) { this.lib = []; }
+  },
+  _saveRegs() {
+    localStorage.setItem("pcm70.regs",
+      JSON.stringify(this.regs.map(e => e ? { d: this._toB64(e.data), ts: e.ts } : null)));
+  },
+  _saveLib() { localStorage.setItem("pcm70.lib", JSON.stringify(this.lib)); },
+  _toB64(u8) { let s = ""; for (const b of u8) s += String.fromCharCode(b); return btoa(s); },
+  _fromB64(s) {
+    const bin = atob(s), u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return u;
+  },
+
+  regLabel(i) { return `${Math.floor(i / 10)}.${i % 10}`; },
+  regInfo(i) {
+    const e = this.regs[i];
+    if (!e) return null;
+    const prog = Codec.decodeProgram(e.data);
+    return { prog, empty: prog.type === 0 };
+  },
+
+  // Unsolicited stored dumps (e.g. front-panel "send registers") land here.
+  ingest(reg, data167) {
+    this.regs[reg] = { data: data167, ts: Date.now() };
+    this._saveRegs();
+    UI.renderLibrarian();
+    Log.info(`Received register ${this.regLabel(reg)} dump from the unit.`);
+  },
+
+  // Read all 50 registers (paced; ≥30 ms between stored dumps per manual).
+  async sweep() {
+    if (this.sweeping) return;
+    if (!(Midi.out && Midi.in)) { Log.info("Sweep: connect MIDI first."); return; }
+    this.sweeping = true;
+    UI.renderLibrarian();
+    Log.info("Sweeping registers 0.0–4.9…");
+    let ok = 0, fail = 0;
+    for (let i = 0; i < 50; i++) {
+      try {
+        const reply = await Midi.request(Sysex.buildDumpRequest(Midi.channel(), { stored: true, reg: i }),
+          { match: (m) => m.kind === "bulk" && m.stored && m.reg === i, timeoutMs: 1200, retries: 1 });
+        if (reply.checksumOk && reply.data167) { this.regs[i] = { data: reply.data167, ts: Date.now() }; ok++; }
+        else fail++;
+      } catch (e) { fail++; }
+      await sleep(SEND_INTERVAL_MS);
+      UI.renderLibrarian();
+    }
+    this.sweeping = false;
+    this._saveRegs();
+    UI.renderLibrarian();
+    Log.info(`Sweep done: ${ok} registers read${fail ? `, ${fail} failed` : ""}.`);
+  },
+
+  // Permanent save: stored bulk dump, then read the register back and compare.
+  async storeToRegister(i) {
+    if (!(Midi.out && Midi.in)) { Log.info("Store: connect MIDI first."); return; }
+    if (UI.blockV3Send()) return;
+    const label = this.regLabel(i);
+    const cur = this.regInfo(i);
+    const what = cur && !cur.empty ? `overwrite ${label} "${cur.prog.name.trim()}"` : `store into ${label}`;
+    if (!window.confirm(`Store "${Store.prog.name}" — ${what}?`)) return;
+    const data = Codec.encodeProgram(Store.prog);
+    Midi.enqueue(Sysex.buildBulkData(Midi.channel(), { stored: true, reg: i, data167: data }));
+    Log.info(`Storing to register ${label}…`);
+    await sleep(400); // wire time + battery-RAM write headroom
+    try {
+      const reply = await Midi.request(Sysex.buildDumpRequest(Midi.channel(), { stored: true, reg: i }),
+        { match: (m) => m.kind === "bulk" && m.stored && m.reg === i, timeoutMs: 1500, retries: 1 });
+      const got = reply.data167;
+      const same = reply.checksumOk && got && got.length === data.length && got.every((b, k) => b === data[k]);
+      if (same) {
+        this.regs[i] = { data, ts: Date.now() };
+        this._saveRegs();
+        Store.origin = { kind: "register", id: i };
+        Store.dirty = false;
+        UI.renderAll();
+        Log.info(`✓ Register ${label} stored and verified.`);
+      } else {
+        Log.info(`⚠ Register ${label} readback differs — store may have been rejected. ` +
+          `If M PROTECT is on, turn it off on the unit (Control Program 7.0, param 0.1).`);
+        if (reply.checksumOk && got) { this.regs[i] = { data: got, ts: Date.now() }; this._saveRegs(); UI.renderLibrarian(); }
+      }
+    } catch (e) { Log.info(`Store verify failed: ${e.message}`); }
+  },
+
+  saveCurrent() {
+    const entry = {
+      id: `L${Date.now().toString(36)}_${this.lib.length}`,
+      name: (Store.prog.name || "UNNAMED").trim() || "UNNAMED",
+      type: Store.prog.type,
+      ts: Date.now(),
+      b64: this._toB64(Codec.encodeProgram(Store.prog)),
+    };
+    this.lib.unshift(entry);
+    this._saveLib();
+    UI.renderLibrarian();
+    Log.info(`Saved "${entry.name}" to library.`);
+  },
+
+  // Parse any .syx buffer: every valid PCM 70 bulk dump becomes a library entry.
+  importBuffer(buf, label) {
+    const bytes = new Uint8Array(buf);
+    let i = 0, added = 0, empty = 0, bad = 0;
+    while (i < bytes.length) {
+      if (bytes[i] !== 0xf0) { i++; continue; }
+      let j = i + 1;
+      while (j < bytes.length && bytes[j] !== 0xf7) j++;
+      if (j >= bytes.length) break;
+      const parsed = Sysex.parse(bytes.slice(i, j + 1));
+      i = j + 1;
+      if (!parsed || parsed.kind !== "bulk") continue;
+      if (!(parsed.checksumOk && parsed.data167)) { bad++; continue; }
+      const prog = Codec.decodeProgram(parsed.data167);
+      if (prog.type === 0) { empty++; continue; } // unused register slot
+      this.lib.push({
+        id: `L${Date.now().toString(36)}_${this.lib.length}_${added}`,
+        name: (prog.name || "UNNAMED").trim() || "UNNAMED",
+        type: prog.type,
+        ts: Date.now(),
+        src: label + (parsed.stored ? ` reg ${this.regLabel(parsed.reg)}` : ""),
+        b64: this._toB64(parsed.data167),
+      });
+      added++;
+    }
+    this._saveLib();
+    UI.renderLibrarian();
+    Log.info(`Import ${label}: ${added} programs added` +
+      (empty ? `, ${empty} empty slots skipped` : "") +
+      (bad ? `, ${bad} failed checksum` : "") + ".");
+  },
+
+  // Full-bank .syx download from the register cache (sweeps first if needed).
+  async backup() {
+    let missing = this.regs.filter(e => !e).length;
+    if (missing && Midi.out && Midi.in) {
+      Log.info(`Backup: ${missing} registers not cached — sweeping first…`);
+      await this.sweep();
+      missing = this.regs.filter(e => !e).length;
+    }
+    if (missing === 50) { Log.info("Backup: no register data — sweep the unit first."); return; }
+    const parts = [];
+    this.regs.forEach((e, i) => {
+      if (e) parts.push(Sysex.buildBulkData(Midi.channel(), { stored: true, reg: i, data167: e.data }));
+    });
+    const d = new Date(), pad = (n) => String(n).padStart(2, "0");
+    const fn = `pcm70-registers-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.syx`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(parts, { type: "application/octet-stream" }));
+    a.download = fn;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    Log.info(`Backup: wrote ${parts.length} registers to ${fn}` + (missing ? ` (${missing} slots missing)` : "") + ".");
+  },
+};
 
 /* ---- 8. Log ----------------------------------------------------------- */
 // Ring buffer of decoded TX/RX lines rendered into the console strip.
@@ -1219,6 +1606,7 @@ window.APP = { Midi, Store, UI, Librarian, Log, Sysex, Codec, Convert, DATA };
 /* ---- boot ------------------------------------------------------------- */
 window.addEventListener("DOMContentLoaded", () => {
   Log.init();
+  Librarian.init();
   UI.initTheme();
   UI.initToggles();
   UI.initChannelSelect();
@@ -1226,7 +1614,13 @@ window.addEventListener("DOMContentLoaded", () => {
   UI.initTransfer();
   UI.initLibrarian();
   Store.onChange((change) => UI.onStoreChange(change));
-  Midi.onBulk = (p) => { if (p.checksumOk && p.data167) UI.applyDump(p, { kind: "scratch", id: null }); };
+  // Unsolicited dumps: stored ones (front-panel "send registers") fill the
+  // register cache; an active one replaces the working copy (with confirm).
+  Midi.onBulk = (p) => {
+    if (!(p.checksumOk && p.data167)) return;
+    if (p.stored) Librarian.ingest(p.reg, p.data167);
+    else UI.applyDump(p, { kind: "scratch", id: null });
+  };
   // Start with a neutral scratch program so the editor is populated on load.
   Store.replaceProgram(Store.makeDefault(7), { origin: { kind: "scratch", id: null } });
 });

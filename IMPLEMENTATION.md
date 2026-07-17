@@ -362,17 +362,43 @@ treat as 95 % right, re-verify each against PDF page 61 in the implementing sess
 - [ ] Program selector for all 42 presets + register origin display
 
 ### M4 — Hardware sync
-- [ ] Auto-send live parameter changes through the send queue
-- [ ] Get (active dump → working copy, dirty confirm) / Send (working copy → active bulk)
-- [ ] Load register via Program Change + Get; Peek via stored-dump request
-- [ ] Store-to-register with verify readback + M PROTECT error message
-- [ ] Version-mismatch / malformed-dump error handling (checksum fail, wrong byte count, unknown program type)
+- [x] Auto-send live parameter changes through the send queue
+- [x] Get (active dump → working copy, dirty confirm) / Put (working copy → active bulk)
+- [x] Load preset/register via Put (parameter-mode escape) + Program Change + Get,
+      verified by name; offline loads from the register cache
+- [x] Store-to-register with verify readback + M PROTECT error message (hardware test pending)
+- [x] Malformed-dump handling (checksum/count validation, dump audit with raw-word log);
+      Inverse Room sends blocked on V2.0 (crash guard)
 
 ### M5 — Librarian
-- [ ] Register sweep: request all 50 stored dumps (paced), populate list with names + type chips
-- [ ] Browser library in localStorage: save/duplicate/rename/delete named programs
-- [ ] `.syx` export (single program / full 50-register backup) and import (drag & drop), plus JSON export for diff-friendly backups
-- [ ] Move/copy between library ⇄ registers
+- [x] Register sweep: request all 50 stored dumps (paced), cached in localStorage,
+      names + type chips; unsolicited stored dumps (front-panel send) auto-ingest
+- [x] Browser library in localStorage: save current / rename / delete
+- [x] `.syx` full-bank backup download and multi-file import (validated against two
+      real 50-register banks in `dumps/`); JSON export still open
+- [x] Library ⇄ registers: library entry → editor → "⤓ store" into any register
+
+### M6.5 — Firmware 3.0.1 support (after the ROM swap; V2.0 testing first)
+
+The unit will be upgraded to 3.0.1 ROMs (better Dynamic MIDI). Plan:
+
+- [ ] `FIRMWARE` becomes a persisted UI setting (2.0 / 3.0), not a constant — there is
+      **no documented sysex version query**, so detection is manual (the unit shows the
+      version at power-on). Keep 2.0 as the default until switched.
+- [ ] Firmware-keyed **layouts, not just gates**: the V2.0 Concert Hall rows 3/4
+      (7 levels + 7 delays at 85–97/99–111, DLY MSTR centered raw 400, delay voices
+      anchored raw 512) were hardware-calibrated and differ from the V3.00 table
+      (5 levels 85–93 + 7 delays 99–111, anchors at 472/512/400). Layout selection
+      must consult FIRMWARE per algorithm; re-verify Concert Hall on 3.0.1 with the
+      dump audit + panel comparison, same method as V2.0.
+- [ ] Enable type 14 (Inverse Room) + its layout (Table 9A, already transcribed) and
+      the MIDI Clock patch source (#70); drop the Inverse-Room send guard when
+      FIRMWARE ≥ 3.
+- [ ] Re-check the V3.00 "New Features" list (ch. vi) for behavior changes that touch
+      the editor: PC-for-running-program ignored-unless-edited, register bank send, etc.
+- [ ] V2.0 presets survive via the librarian: sweep + backup the V2.0 bank BEFORE the
+      ROM swap (registers live in battery RAM and may not survive; `dumps/` also holds
+      a V2.0 factory bank found online, import-verified).
 
 ### M6 — Hardware validation (needs the real unit)
 - [ ] Verify each message type against the PCM 70; record actual behavior in `HARDWARE-NOTES.md`

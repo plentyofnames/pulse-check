@@ -4,3 +4,6 @@
 # Local tooling / session data
 .claude/
 .DS_Store
+
+# Sysex banks found online (unverified provenance) — keep local
+dumps/
