@@ -53,7 +53,7 @@
           sizeParams: { minSize: 5, timeConst: 444, sizeConst: 164, sizeBase: 31362, sizeRawMin: 488, sizeRawMax: 537 } },
     8:  { name: "Rich Chamber",      layout: "richReverb",
           sizeParams: { minSize: 8, timeConst: 388, sizeConst: 511, sizeBase: 30151, sizeRawMin: 493, sizeRawMax: 531 } },
-    9:  { name: "Rich Plate",        layout: "richReverb",
+    9:  { name: "Rich Plate",        layout: "richReverb", layoutV3: "richPlateV3",
           sizeParams: { minSize: 8, timeConst: 471, sizeConst: 424, sizeBase: 30892, sizeRawMin: 491, sizeRawMax: 532 } },
     10: { name: "Infinite Reverb",   layout: "infinite",
           sizeParams: { minSize: 8, timeConst: 388, sizeConst: 511, sizeBase: 30151, sizeRawMin: 493, sizeRawMax: 531 } },
@@ -311,6 +311,58 @@
       { row: 1, label: "Reverb time", params: [
         p(0, "RT LOW",   67, 496, 527, "rtime"),
         p(1, "RT MID",   69, 496, 527, "rtime"),
+        p(2, "XOVER",    71, 497, 527, "freq"),
+        p(3, "RT HC",    73, 496, 527, "freq"),
+        p(4, "RTL STOP", 75, 496, 527, "rtime"),
+        p(5, "RTM STOP", 77, 496, 527, "rtime"),
+      ]},
+      { row: 2, label: "Reverb design", params: [
+        p(0, "DIFFUSION",  79, 462, 561, "plain"),
+        p(1, "ATTACK",     81, 462, 561, "plain"),
+        p(2, "DEFINITION", 83, 462, 561, "plain"),
+      ]},
+      { row: 3, label: "Reflection levels", params: [
+        p(0, "REFL LVL MSTR", 85, 472, 547, "signed", { dispMin: -35, dispMax: 35 }),
+        p(1, "REFL L1", 87, 495, 530, "level"),
+        p(2, "REFL L2", 89, 495, 530, "level"),
+        p(3, "REFL L3", 91, 495, 530, "level"),
+        p(4, "REFL R1", 93, 495, 530, "level"),
+        p(5, "REFL R2", 95, 495, 530, "level"),
+        p(6, "REFL R3", 97, 495, 530, "level"),
+      ]},
+      { row: 4, label: "Reflection delays", params: [
+        p(0, "REFL DLY MSTR", 99, 206, 818, "signed", { dispMin: -306, dispMax: 306, unit: "ms" }),
+        p(1, "REFL L1", 101, 400, 624, "delay"),
+        p(2, "REFL L2", 103, 400, 624, "delay"),
+        p(3, "REFL L3", 105, 400, 624, "delay"),
+        p(4, "REFL R1", 107, 400, 624, "delay"),
+        p(5, "REFL R2", 109, 400, 624, "delay"),
+        p(6, "REFL R3", 111, 400, 624, "delay"),
+      ]},
+    ],
+
+    // ---- Rich Plate on 3.0.1 (type 9) ----
+    // Identical to richReverb except the running RTs: hardware-calibrated
+    // 2026-07-19 (VOX PLATE, SIZE 520 → time factor 22): the panel reads
+    // Table 11 ten entries above the 496 anchor → range 486–517. The running-
+    // RT anchor is a per-type constant on 3.0.1 (Chamber 496 confirmed exact,
+    // Hall 493, Plate 486) with no discernible rule — and it is invisible on
+    // the panel (each range spans the full table), so V2.0 may have had the
+    // same anchors all along, unverified. Stopped RTs stay at 496 everywhere.
+    richPlateV3: [
+      { row: 0, label: "Master", params: [
+        p(0, "MIX",       47, 462, 562, "mix"),
+        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -90, dispMax: 12, unit: "dB" }),
+        p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
+        p(3, "SIZE",      53, 491, 532, "size"),
+        p(4, "GATE TIME", 55, 384, 639, "gate"),
+        p(5, "PDELAY",    57, 385, 638, "predelay"),
+        p(6, "HC",        59, 497, 527, "freq"),
+        p(7, "DCY OPT",   61, 512, 513, "onoff"),
+      ]},
+      { row: 1, label: "Reverb time", params: [
+        p(0, "RT LOW",   67, 486, 517, "rtime"),
+        p(1, "RT MID",   69, 486, 517, "rtime"),
         p(2, "XOVER",    71, 497, 527, "freq"),
         p(3, "RT HC",    73, 496, 527, "freq"),
         p(4, "RTL STOP", 75, 496, 527, "rtime"),

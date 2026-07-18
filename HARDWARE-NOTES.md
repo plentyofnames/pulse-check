@@ -134,6 +134,18 @@ switches layouts, the preset matrix, Inverse Room, and the MIDI Clock source).
       - **FX ADJ is exactly 1 dB/raw step, 0 dB @ raw 551** → range 461–563 =
         −90…+12 dB. The reverbs' printed "−80" minimum is a misprint; fixed in
         all layouts (verified pairs: raw 551→0, 557→+6).
+- [x] **Running-RT anchors are per-type constants on 3.0.1** (2026-07-19, word
+      dumps + panel): Chamber **496** (SOFT AMBIENCE: TF 14, 1.596/0.364 exact),
+      Hall **493**, Plate **486** (VOX PLATE: TF 22, +10 table shift). No
+      discernible rule — and the shift is invisible on the panel (each range
+      spans the full Table 11), so V2.0 may have had the same anchors,
+      unverified (V2.0 running RTs were never panel-compared). Plate gets
+      richPlateV3; stopped RTs are 496 everywhere.
+      Still open on V3: Infinite Reverb's REV TIME anchor (check INFINITE A T
+      vs panel), and Chamber/Plate rows 3/4 (delay-master center 400-vs-512 is
+      ambiguous in the SOFT AMBIENCE/VOX PLATE dumps — both read 512/values
+      that display 0 either way; needs a panel comparison with non-zero
+      reflections).
 - [ ] **Inverse Room** (first ever): load 6.0 INVERSE ROOM — audit lines + panel
       comparison for the whole layout (Table 9A was transcribed but never
       verified); check the DURATION-dependent limits behavior (editor does not
