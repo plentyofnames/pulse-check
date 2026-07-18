@@ -278,11 +278,14 @@ group("Convert.toDisplay — anchored to manual display columns");
     Convert.toDisplay(cm, 512, cc).text === "6VC S" && Convert.toDisplay(cm, 513, cc).text === "1VC T" &&
     Convert.toDisplay(cm, 518, cc).text === "6VC T");
 
-  // PITCH Db1 – Eb7 (Table 6)
+  // PITCH Db1 – Eb7, anchor raw 413 (hardware-calibrated 2026-07-19: the whole
+  // pitch row sits 62 raws below the printed Table 6 values; 457 → A4 proven)
   const pit = meta("resonantChords", "V1 PITCH");
   const rc = { type: 6, sizeRaw: null };
-  log("V1 PITCH raw475 → Db1, raw549 → Eb7",
-    Convert.toDisplay(pit, 475, rc).text === "Db1" && Convert.toDisplay(pit, 549, rc).text === "Eb7");
+  log("V1 PITCH raw413 → Db1, raw457 → A4, raw487 → Eb7",
+    Convert.toDisplay(pit, 413, rc).text === "Db1" &&
+    Convert.toDisplay(pit, 457, rc).text === "A4" &&
+    Convert.toDisplay(pit, 487, rc).text === "Eb7");
 }
 
 /* ---- 9. size-dependent clamps vs manual worked examples (6-14) -------- */

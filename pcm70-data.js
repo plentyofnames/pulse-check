@@ -159,8 +159,13 @@
         ...voices(1, "V", 69, 495, 530, "level").map((e, i) => (e.name = `V${i + 1} LVL`, e)),
       ]},
       { row: 2, label: "Pitch", params: [
-        p(0, "PCH MST", 81, 438, 586, "signed", { dispMin: -74, dispMax: 74 }),
-        ...voices(1, "V", 83, 475, 549, "pitch").map((e, i) => (e.name = `V${i + 1} PITCH`, e)),
+        // The whole pitch row sits 62 raws BELOW the printed values —
+        // hardware-calibrated 2026-07-19 on 3.0.1 Rhythmic Chords (AUTO
+        // SUSPENSE): voices 457/459/460 → A4/B4/C5 (anchor 413, 1 raw per
+        // semitone), master raw 481 → +31 on the panel (center 450). Type 6
+        // shares this layout unverified — the audit will flag it if it differs.
+        p(0, "PCH MST", 81, 376, 524, "signed", { dispMin: -74, dispMax: 74 }),
+        ...voices(1, "V", 83, 413, 487, "pitch").map((e, i) => (e.name = `V${i + 1} PITCH`, e)),
       ]},
       { row: 3, label: "Resonance", params: [
         p(0, "RESN MST", 95, 318, 706, "signed", { dispMin: -194, dispMax: 194 }),
