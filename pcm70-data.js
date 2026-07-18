@@ -146,8 +146,13 @@
         p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
         p(3, "V3 FDBK",   53, 462, 561, "plain"),
         p(4, "V6 FDBK",   55, 462, 561, "plain"),
-        p(5, "HFC LEFT",  57, 496, 527, "freq"),
-        p(6, "HFC RIGHT", 59, 496, 527, "freq"),
+        // HFC pair anchored at raw 530, NOT the global 496 freq base — two
+        // hardware points on 3.0.1 Rhythmic Chords (AUTO SUSPENSE): raw 561 →
+        // 15 kHz, raw 556 → 9.02 kHz (both = raw − 530 into Table 13). The
+        // printed 496–527 is wrong. Verified on type 13; type 6 shares this
+        // layout unverified — the dump audit will flag it if it differs.
+        p(5, "HFC LEFT",  57, 530, 561, "freq", { freqBase: 530 }),
+        p(6, "HFC RIGHT", 59, 530, 561, "freq", { freqBase: 530 }),
       ]},
       { row: 1, label: "Levels", params: [
         p(0, "LVL MST", 67, 477, 547, "signed", { dispMin: -35, dispMax: 35 }),

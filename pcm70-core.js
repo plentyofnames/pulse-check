@@ -377,7 +377,9 @@
           return wrap(lv + " dB", typeof lv === "number" ? lv : null);
         }
         case "freq": {
-          const hz = this._tbl(D.FREQUENCIES, raw - FREQ_BASE);
+          // meta.freqBase: per-param Table 13 anchor override (hardware-proven
+          // for the Resonant Chords HFC pair @530; everything else uses 496).
+          const hz = this._tbl(D.FREQUENCIES, raw - (meta.freqBase || FREQ_BASE));
           return wrap(this._fmtFreq(hz), hz);
         }
         case "size": {
