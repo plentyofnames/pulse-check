@@ -77,16 +77,18 @@
         p(0, "MIX",       47, 462, 562, "mix"),
         p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -90, dispMax: 12, unit: "dB" }),
         p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
-        // Dump order per the V3.00 table (CHORUS@59, DIFFUSION@55). The V2.0
-        // manual's "natural" order (CHORUS@55, DIFFUSION@59) was REFUTED on the
-        // real V2.0 unit 2026-07-14: a preset dump had byte55=527 (impossible
-        // for CHORUS, max 518; fine for DIFFUSION=65) and byte59=518 (= CHORUS
-        // 6VC T exactly). Param numbers (cols) still per the manuals — verify
-        // 0.4/0.5/0.6 against the front panel. See HARDWARE-NOTES.md.
+        // Hardware-calibrated byte order: CHORUSING@53, HC@55, DIFFUSION@57,
+        // CHORUS@59 — NEITHER manual prints this. Evidence: (a) 2026-07-14,
+        // PSYCHO ECHOES (V2.0): byte59=518 = CHORUS 6VC T exactly, refuting
+        // the V2.0 print's CHORUS@55; (b) 2026-07-19, full V3.01 preset-bank
+        // audit: 9/10 C&E programs carry 462–561 (DIFFUSION-range) values at
+        // byte57 and clean 496–527 values at byte55 — and byte55=527 → 15.0 kHz
+        // matches the V2.0 panel reading for PSYCHO's HC exactly (the earlier
+        // "HC=552 clamps" interpretation misassigned these two bytes).
         p(3, "CHORUSING", 53, 462, 561, "plain"),
         p(4, "CHORUS",    59, 506, 518, "chorusMode"),
-        p(5, "HC",        57, 496, 527, "freq"),
-        p(6, "DIFFUSION", 55, 462, 561, "plain"),
+        p(5, "HC",        55, 496, 527, "freq"),
+        p(6, "DIFFUSION", 57, 462, 561, "plain"),
       ]},
       { row: 1, label: "Levels", params: [
         p(0, "LVL MST", 67, 477, 547, "signed", { dispMin: -35, dispMax: 35 }),

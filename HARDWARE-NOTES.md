@@ -266,12 +266,22 @@ MIDI Clock and offset semantics), librarian read/write, preset matrices.
   then delayed active-dump fetch): 0.7 PSYCHO ECHOES loaded with correct name
   and type. The PC→preset mapping and the matrix-position bytes (1–2) behave
   as the manuals claim.
-- **2026-07-14 — Chorus & Echo dump layout = V3.00 order** (see refutation above).
-- **2026-07-14 — Table lookups clamp at the table ends.** PSYCHO ECHOES stores
-  HC = raw **552**, far beyond the printed 496–527 range, and the unit's front
-  panel displays plain "15.0 kHz" (the table's last entry). So the manuals'
-  printed raw ranges are the *editable* ranges; factory presets store values
-  beyond them and the firmware saturates the display lookup. `Convert._tbl`
-  mirrors this for freq/level/rtime/pitch/chorusMode; the editor still shows
-  such values amber and logs them in the dump audit. Editing one snaps it into
-  the printed range (that is also what the front panel would do).
+- **2026-07-14 — Chorus & Echo dump layout = V3.00 order** ~~(see refutation
+  above)~~ **RE-CORRECTED 2026-07-19**: the true row-0 order is
+  **CHORUSING@53, HC@55, DIFFUSION@57, CHORUS@59** — printed by NEITHER
+  manual. Proof: the full V3.01 preset-bank audit had 9/10 C&E programs with
+  DIFFUSION-range (462–561) values at byte 57 and clean HC-range values at
+  byte 55; under the swap every program decodes sanely (nine HCs at 15.0 kHz
+  wide open, FOR STRINGS at 8.19, all DIFFUSIONs 0–99), and PSYCHO ECHOES'
+  V2.0 panel reading (HC 15.0 kHz) matches byte 55 = 527 **exactly** rather
+  than requiring the "byte 57 = 552 clamps" interpretation.
+- **2026-07-14 — Table lookups clamp at the table ends.** ⚠ *Partly amended
+  2026-07-19*: the original evidence (PSYCHO "HC = 552 shows 15.0 kHz") is
+  reattributed by the HC/DIFFUSION byte swap above — that byte was DIFFUSION
+  90 all along. **Low-end display clamping remains hardware-proven** on
+  independent evidence (levels below 495 show OFF, linear masters clamp to
+  their display floor, delays below anchor show 000 ms — CONCERT WAVE and
+  SUSTAIN HALL panel comparisons). High-end saturation is retained in
+  `Convert._tbl` as defensive display behavior but currently rests on no
+  direct high-side observation. Amber flags + dump audit expose the raws
+  either way.
