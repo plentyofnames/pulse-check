@@ -116,16 +116,24 @@ hardware-checked. Clear for the 3.0.1 ROM swap (back up registers first!).
 Set the firmware selector in the rack strip to **V3.01** first (persisted; it
 switches layouts, the preset matrix, Inverse Room, and the MIDI Clock source).
 
-- [ ] **Registers survived?** Sweep unit. If the bank was wiped by the swap:
-      Registers tab → **Restore (.syx)** with the pre-swap backup (M PROTECT off);
-      it writes all 50 paced and sweeps to verify.
-- [ ] **Basic protocol re-check**: Get, preset load (new V3 matrix — e.g. 3.0
-      SUSTAIN HALL), a param edit with auto-send. Expect no change (framing is
-      version-identical), but verify.
-- [ ] **Concert Hall V3 layout** (concertHallV3: 4 levels 85–93, 6 delays 99–111,
-      delay master centered 512, voices anchored 400): load a Hall preset, check
-      for ⚠ audit lines, and compare rows 3/4 panel↔app like the V2.0 calibration.
-      Also confirm whether LVL MSTR zero sits at raw 512 (477 anchor) on V3 too.
+- [x] **Registers work on 3.0.1** (2026-07-19): load and save verified.
+- [x] **Basic protocol re-check** (2026-07-19): Get, V3-matrix preset loads,
+      live edit / Put / Get all work — framing is version-identical as expected.
+- [x] **Concert Hall V3 layout — CALIBRATED 2026-07-19** (3.0 SUSTAIN HALL,
+      panel↔app comparison + words dumps). 3.0.1 reality vs the V3.00 ch6 table:
+      - Rows 3/4 are master + FOUR voices each (3.5/3.6 and 4.5/4.6 unavailable
+        on the panel; bytes 95/97/109/111 unused). LVL MSTR 477 anchor holds.
+      - Delay master centered raw 400 (like V2.0 — printed 206–818 wrong on
+        both firmwares); delay voices anchored raw 512 (like V2.0, not the
+        printed 400).
+      - **Running RT LOW/MID range is 493–524** — three raw steps below V2.0's
+        496–527, same 32-entry Table 11 span (five calibration pairs incl. both
+        ends: 0.45 s @493 … 63 s @524, time factor 45 at SIZE raw 534). Stopped
+        RTs keep the 496 anchor. This shift is Concert-Hall-specific: Rich
+        Chamber's running RTs agree with the panel unchanged (SOFT AMBIENCE).
+      - **FX ADJ is exactly 1 dB/raw step, 0 dB @ raw 551** → range 461–563 =
+        −90…+12 dB. The reverbs' printed "−80" minimum is a misprint; fixed in
+        all layouts (verified pairs: raw 551→0, 557→+6).
 - [ ] **Inverse Room** (first ever): load 6.0 INVERSE ROOM — audit lines + panel
       comparison for the whole layout (Table 9A was transcribed but never
       verified); check the DURATION-dependent limits behavior (editor does not

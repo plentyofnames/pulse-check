@@ -190,7 +190,7 @@
     concertHall: [
       { row: 0, label: "Master", params: [
         p(0, "MIX",       47, 462, 562, "mix"),
-        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -80, dispMax: 12, unit: "dB" }),
+        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -90, dispMax: 12, unit: "dB" }), // 1 dB/step, 0 dB @ raw 551 (hw 2026-07-19); printed "-80" is a misprint
         p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
         // SIZE: 488–537 (min-size 5). The V2.0 table misprints 491–532/"5.6–34.7m"
         // — a copy of the Rich Plate row (min-size 8); those are inconsistent with
@@ -246,7 +246,7 @@
     concertHallV3: [
       { row: 0, label: "Master", params: [
         p(0, "MIX",       47, 462, 562, "mix"),
-        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -80, dispMax: 12, unit: "dB" }),
+        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -90, dispMax: 12, unit: "dB" }), // 1 dB/step, 0 dB @ raw 551 (hw 2026-07-19); printed "-80" is a misprint
         p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
         p(3, "SIZE",      53, 488, 537, "size"),
         p(4, "GATE TIME", 55, 384, 639, "gate"),
@@ -256,8 +256,12 @@
         p(8, "CHORUSING", 61, 462, 561, "plain"),
       ]},
       { row: 1, label: "Reverb time", params: [
-        p(0, "RT LOW",   67, 496, 527, "rtime"),
-        p(1, "RT MID",   69, 496, 527, "rtime"),
+        // Running RTs on 3.0.1 sit 3 raw steps LOWER than V2.0 (493–524, same
+        // 32-entry Table 11 span) — hardware-calibrated 2026-07-19 with five
+        // panel↔app pairs incl. both range ends (0.45 s @493, 63 s @524).
+        // The stopped RTs keep the 496 anchor (they matched unchanged).
+        p(0, "RT LOW",   67, 493, 524, "rtime"),
+        p(1, "RT MID",   69, 493, 524, "rtime"),
         p(2, "XOVER",    71, 497, 527, "freq"),
         p(3, "RT HC",    73, 496, 527, "freq"),
         p(4, "RTL STOP", 75, 496, 527, "rtime"),
@@ -269,6 +273,7 @@
         p(2, "DEFINITION", 83, 462, 561, "plain"),
       ]},
       { row: 3, label: "Reflection levels", params: [
+        // master + FOUR levels confirmed on 3.0.1 panel (3.5/3.6 don't exist)
         p(0, "REFL LVL MSTR", 85, 477, 547, "signed", { dispMin: -35, dispMax: 35 }),
         p(1, "REFL L1", 87, 495, 530, "level"),
         p(2, "REFL L2", 89, 495, 530, "level"),
@@ -276,13 +281,17 @@
         p(4, "REFL R2", 93, 495, 530, "level"),
       ]},
       { row: 4, label: "Reflection delays", params: [
-        p(0, "REFL DLY MSTR", 99, 206, 818, "signed", { dispMin: -306, dispMax: 306, unit: "ms" }),
-        p(1, "REFL L1", 101, 400, 624, "delay"),
-        p(2, "REFL L2", 103, 400, 624, "delay"),
-        p(3, "REFL L3", 105, 400, 624, "delay"),
-        p(4, "REFL R1", 107, 400, 624, "delay"),
-        p(5, "REFL R2", 109, 400, 624, "delay"),
-        p(6, "REFL R3", 111, 400, 624, "delay"),
+        // Hardware-calibrated on 3.0.1 (SUSTAIN HALL, 2026-07-19): master
+        // centered raw 400 (panel 0 there — printed 206–818/center-512 wrong
+        // on BOTH firmwares), voices anchored raw 512 like V2.0 (panel 0 at
+        // 512 AND at below-range 400), and only FOUR voices — the panel says
+        // 4.5/4.6 unavailable, so bytes 109/111 are unused on 3.0.1. The
+        // V3.00 ch6 table (6 voices, 400 anchor) is refuted on this firmware.
+        p(0, "REFL DLY MSTR", 99, 94, 706, "signed", { dispMin: -306, dispMax: 306, unit: "ms" }),
+        p(1, "REFL L1", 101, 512, 736, "delay"),
+        p(2, "REFL L2", 103, 512, 736, "delay"),
+        p(3, "REFL R1", 105, 512, 736, "delay"),
+        p(4, "REFL R2", 107, 512, 736, "delay"),
       ]},
     ],
 
@@ -291,7 +300,7 @@
     richReverb: [
       { row: 0, label: "Master", params: [
         p(0, "MIX",       47, 462, 562, "mix"),
-        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -80, dispMax: 12, unit: "dB" }),
+        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -90, dispMax: 12, unit: "dB" }), // 1 dB/step, 0 dB @ raw 551 (hw 2026-07-19); printed "-80" is a misprint
         p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
         p(3, "SIZE",      53, 493, 531, "size"),
         p(4, "GATE TIME", 55, 384, 639, "gate"),
@@ -336,7 +345,7 @@
     infinite: [
       { row: 0, label: "Master", params: [
         p(0, "MIX",       47, 462, 562, "mix"),
-        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -80, dispMax: 12, unit: "dB" }),
+        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -90, dispMax: 12, unit: "dB" }), // 1 dB/step, 0 dB @ raw 551 (hw 2026-07-19); printed "-80" is a misprint
         p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
         p(3, "SIZE",      53, 493, 531, "size"),
         p(4, "REV TIME",  55, 496, 528, "revtime"),
@@ -372,7 +381,7 @@
     inverseRoom: [
       { row: 0, label: "Master", params: [
         p(0, "MIX",       47, 462, 562, "mix"),
-        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -80, dispMax: 12, unit: "dB" }),
+        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -90, dispMax: 12, unit: "dB" }), // 1 dB/step, 0 dB @ raw 551 (hw 2026-07-19); printed "-80" is a misprint
         p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
         p(3, "DURATION",  53, 493, 531, "linear", { dispMin: 102, dispMax: 600, unit: "ms" }),
         p(4, "PDELAY",    57, 385, 638, "predelay"),
