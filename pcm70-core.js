@@ -337,24 +337,33 @@
 
       switch (meta.kind) {
         case "mix": {
-          const pct = Math.round(val * 100 / (meta.rawMax - meta.rawMin));
+          const pct = Math.max(0, Math.min(100, Math.round(val * 100 / (meta.rawMax - meta.rawMin))));
           return wrap(pct + "%", pct);
         }
-        case "softknob": return wrap(String(val), val);
-        case "plain":    return wrap(String(val), val);
+        case "softknob": case "plain": {
+          const v = Math.max(0, Math.min(meta.rawMax - meta.rawMin, val));
+          return wrap(String(v), v);
+        }
         case "onoff":    return wrap(raw >= meta.rawMax ? "ON" : "OFF", null);
 
         case "fxdb": case "linear": case "signed": case "pct": {
           // BPM variants replace the delay/predelay master with RATE BPM
           // (448–575 → 64–191 BPM). Hardware-calibrated 2026-07-18: two
           // editor↔panel pairs (val 36 → 100 BPM, val 54 → 118) give BPM = val+64.
-          if (bpmActive) return wrap(`${val + 64} BPM`, val + 64);
-          const n = Math.round(this._lin(meta, raw, limits)); // manual shows integer steps
+          if (bpmActive) {
+            const b = Math.max(64, Math.min(191, val + 64));
+            return wrap(`${b} BPM`, b);
+          }
+          // clamp to the display range like the hardware (factory data stores
+          // below-range raws; e.g. CONCERT WAVE LVL MSTR raw 469 shows −35)
+          let n = Math.round(this._lin(meta, raw, limits));
+          n = Math.max(meta.dispMin, Math.min(meta.dispMax, n));
           const sign = (meta.dispMin < 0 && n > 0) ? "+" : "";
           return wrap(sign + n + (meta.unit ? " " + meta.unit : ""), n);
         }
         case "pan": case "panR": {
-          const n = Math.round(this._lin(meta, raw, limits)); // -50..+50
+          let n = Math.round(this._lin(meta, raw, limits)); // -50..+50
+          n = Math.max(meta.dispMin, Math.min(meta.dispMax, n));
           const L = meta.kind === "panR" ? n > 0 : n < 0;
           const txt = n === 0 ? "CTR" : Math.abs(n) + (L ? "L" : "R");
           return wrap(txt, n);
@@ -394,11 +403,11 @@
         }
         case "gate": {
           if (raw >= meta.rawMax) return wrap("OFF", null);
-          const ms = val * 18;
+          const ms = Math.max(0, val) * 18;
           return ms >= 1000 ? wrap(this._sig3(ms / 1000) + " s", ms) : wrap(ms + " ms", ms);
         }
         case "predelay": {
-          const ms = val * 2;
+          const ms = Math.max(0, val) * 2;
           return wrap(ms + " ms", ms);
         }
         case "delay": {
@@ -418,7 +427,8 @@
             const n = Math.max(0, Math.min(24, val));
             return wrap(`${n}/24 beat`, n);
           }
-          const ms = Math.round(this._lin(meta, raw, limits));
+          let ms = Math.round(this._lin(meta, raw, limits));
+          ms = Math.max(meta.dispMin, Math.min(meta.dispMax, ms));
           return wrap(ms + " ms", ms);
         }
         case "chorusMode": {
