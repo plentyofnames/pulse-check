@@ -164,6 +164,11 @@ switches layouts, the preset matrix, Inverse Room, and the MIDI Clock source).
       Clock is tracked continuously as patch source #70; programs react only
       where a patch routes it (per Dynamic MIDI design). Patch-scale encoding
       unchanged on 3.0.1.
+      **Patch semantics confirmed: sources OFFSET the parameter's stored value**
+      (the manual's "starting point"). Clock source value = BPM − 64, so 1:1
+      tempo tracking needs the destination RATE BPM stored at 64 (val 0) —
+      which is exactly how the factory clock-patched presets ship (AUTO BOUNCE
+      base 64 tracks 1:1; BONANZA's base 114 yields clock + 50).
 - [ ] **Preset sweep V3**: sweep → library → export a verified V3.01 preset bank
       (also fills in the true row-6 names/types).
 

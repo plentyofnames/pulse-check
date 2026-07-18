@@ -489,8 +489,11 @@
         <!-- 10 patch rows injected by UI.renderPatchBay() -->
       </div>
       <p class="patch-note">
-        Sources: Ctrl 0–31, Switch 64–95, Pitch Wheel, After Touch, Last Note, Last Velocity, Soft Knob.
-        Destinations list only the parameters of the loaded program. Scale is ±128; negative values invert the controller.
+        Sources: Ctrl 0–31, Switch 64–95, Pitch Wheel, After Touch, Last Note, Last Velocity, Soft Knob
+        (+ MIDI Clock on V3). Destinations list only the parameters of the loaded program.
+        Scale is ±128; negative values invert the controller.
+        Patches <em>offset</em> the parameter's stored value (its "starting point") — e.g. for 1:1
+        MIDI-clock tempo tracking, set RATE BPM to 64 first.
       </p>
     </aside>
   </div>
