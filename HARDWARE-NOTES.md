@@ -158,9 +158,12 @@ switches layouts, the preset matrix, Inverse Room, and the MIDI Clock source).
       model them yet).
 - [ ] **Row 6 preset names**: the V3 preset table's row 6 is manual-derived —
       the load log will report any name mismatches; fix the table from the unit.
-- [ ] **MIDI Clock patch source** (#70): patch it to a BPM program's RATE and
-      confirm the unit follows external clock; check the patch-scale encoding
-      still matches (expected: same firmware family).
+- [x] **MIDI Clock patch source — verified 2026-07-19.** The unit follows the
+      editor's built-in clock generator (24 ppqn, timestamp-scheduled); AUTO
+      BOUNCE ships with the clock patch factory-wired and reacts as expected.
+      Clock is tracked continuously as patch source #70; programs react only
+      where a patch routes it (per Dynamic MIDI design). Patch-scale encoding
+      unchanged on 3.0.1.
 - [ ] **Preset sweep V3**: sweep → library → export a verified V3.01 preset bank
       (also fills in the true row-6 names/types).
 
