@@ -49,7 +49,7 @@
     4:  { name: "Chorus and Echo",   layout: "chorusEcho" },
     5:  { name: "Multiband",         layout: "multiband" },
     6:  { name: "Resonant Chords",   layout: "resonantChords" },
-    7:  { name: "Concert Hall",      layout: "concertHall",
+    7:  { name: "Concert Hall",      layout: "concertHall", layoutV3: "concertHallV3",
           sizeParams: { minSize: 5, timeConst: 444, sizeConst: 164, sizeBase: 31362, sizeRawMin: 488, sizeRawMax: 537 } },
     8:  { name: "Rich Chamber",      layout: "richReverb",
           sizeParams: { minSize: 8, timeConst: 388, sizeConst: 511, sizeBase: 30151, sizeRawMin: 493, sizeRawMax: 531 } },
@@ -232,6 +232,57 @@
         p(4, "REFL R1", 107, 512, 736, "delay"),
         p(5, "REFL R2", 109, 512, 736, "delay"),
         p(6, "REFL R3", 111, 512, 736, "delay"),
+      ]},
+    ],
+
+    // ---- Table 7 (V3.00): Concert Hall on 3.0.x firmware ----
+    // Rows 0–2 identical to V2.0. Rows 3/4 per the V3.00 ch6 table: 4
+    // reflection levels (85–93) and 6 delays (99–111), delay master centered
+    // raw 512 and voices anchored raw 400 — i.e. NOT the V2.0 arrangement.
+    // LVL MSTR keeps the hardware-proven 477 anchor (both manuals print 472;
+    // V2.0 hardware said 477 and the display code is likely shared).
+    // UNVERIFIED on real 3.0.1 hardware — check the dump audit + panel after
+    // the ROM swap, exactly like the V2.0 calibration.
+    concertHallV3: [
+      { row: 0, label: "Master", params: [
+        p(0, "MIX",       47, 462, 562, "mix"),
+        p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -80, dispMax: 12, unit: "dB" }),
+        p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
+        p(3, "SIZE",      53, 488, 537, "size"),
+        p(4, "GATE TIME", 55, 384, 639, "gate"),
+        p(5, "PDELAY",    57, 385, 638, "predelay"),
+        p(6, "HC",        59, 497, 527, "freq"),
+        p(7, "DCY OPT",   63, 512, 513, "onoff"),
+        p(8, "CHORUSING", 61, 462, 561, "plain"),
+      ]},
+      { row: 1, label: "Reverb time", params: [
+        p(0, "RT LOW",   67, 496, 527, "rtime"),
+        p(1, "RT MID",   69, 496, 527, "rtime"),
+        p(2, "XOVER",    71, 497, 527, "freq"),
+        p(3, "RT HC",    73, 496, 527, "freq"),
+        p(4, "RTL STOP", 75, 496, 527, "rtime"),
+        p(5, "RTM STOP", 77, 496, 527, "rtime"),
+      ]},
+      { row: 2, label: "Reverb design", params: [
+        p(0, "DIFFUSION",  79, 462, 561, "plain"),
+        p(1, "ATTACK",     81, 462, 561, "plain"),
+        p(2, "DEFINITION", 83, 462, 561, "plain"),
+      ]},
+      { row: 3, label: "Reflection levels", params: [
+        p(0, "REFL LVL MSTR", 85, 477, 547, "signed", { dispMin: -35, dispMax: 35 }),
+        p(1, "REFL L1", 87, 495, 530, "level"),
+        p(2, "REFL L2", 89, 495, 530, "level"),
+        p(3, "REFL R1", 91, 495, 530, "level"),
+        p(4, "REFL R2", 93, 495, 530, "level"),
+      ]},
+      { row: 4, label: "Reflection delays", params: [
+        p(0, "REFL DLY MSTR", 99, 206, 818, "signed", { dispMin: -306, dispMax: 306, unit: "ms" }),
+        p(1, "REFL L1", 101, 400, 624, "delay"),
+        p(2, "REFL L2", 103, 400, 624, "delay"),
+        p(3, "REFL L3", 105, 400, 624, "delay"),
+        p(4, "REFL R1", 107, 400, 624, "delay"),
+        p(5, "REFL R2", 109, 400, 624, "delay"),
+        p(6, "REFL R3", 111, 400, 624, "delay"),
       ]},
     ],
 
@@ -439,7 +490,7 @@
     "Chorus & Echo", "Multiband Delays", "Resonant Chords", "Concert Halls",
     "Rich Chambers", "Rich Plates", "MIDI Effects",
   ];
-  const PRESETS = [
+  const PRESETS_V2 = [
     // Row 0 — Chorus & Echo (BPM variants → Chorus and Rhythm, type 12)
     pr(0, 0, "CHORUS", 4), pr(0, 1, "CHORUS ECHOES", 4), pr(0, 2, "ECHO FLANGE", 4),
     pr(0, 3, "STEREO FLANGE", 4), pr(0, 4, "DOUBLE SLAP", 4), pr(0, 5, "SPIN ECHOES", 4),
@@ -465,22 +516,55 @@
     pr(6, 6, "MIDI INF RVB", 10),
   ];
 
+  /* V3.00 factory matrix. Rows 0–5 extracted from a real V3.00 preset bank
+   * dump (names byte-exact, incl. "BONANZA  BPM" / "KICK  CHAMBER" double
+   * spaces; row 5 has FOUR plates — the manual's matrix diagram misprints 3).
+   * Row 6 (Inverse Room, type 14) names are from the manual's program matrix —
+   * best-effort until swept from a real 3.0.x unit. */
+  const PRESETS_V3 = [
+    // Row 0 — Chorus & Echo
+    pr(0, 0, "MOD WOBBLE", 4), pr(0, 1, "ECHORUS", 4), pr(0, 2, "TUNNEL", 4),
+    pr(0, 3, "POWER PHLANGE", 4), pr(0, 4, "6 VOICE COMBO", 4), pr(0, 5, "FOR STRINGS", 4),
+    pr(0, 6, "UNLIN", 4), pr(0, 7, "FLANGE O ECHO", 4), pr(0, 8, "AUTO CHORUS", 12),
+    pr(0, 9, "BONANZA  BPM", 12),
+    // Row 1 — Multiband Delays
+    pr(1, 0, "PING PONG MOD", 5), pr(1, 1, "SIX ACROSS", 5), pr(1, 2, "FILTER 4 EFX", 5),
+    pr(1, 3, "MIDI MOD PAN", 11), pr(1, 4, "AUTO SINGLE", 11), pr(1, 5, "AUTO TUMBLE", 11),
+    pr(1, 6, "AUTO BOUNCE", 11),
+    // Row 2 — Resonant Chords
+    pr(2, 0, "MAJOR MOD", 6), pr(2, 1, "MAJOR MODAL", 6), pr(2, 2, "AUTO SUSPENSE", 13),
+    // Row 3 — Concert Halls
+    pr(3, 0, "SUSTAIN HALL", 7), pr(3, 1, "CONCERT WAVE", 7), pr(3, 2, "SOFT SPACE", 7),
+    pr(3, 3, "5 OCLOCK HALL", 7), pr(3, 4, "SOFT ECHOES", 7),
+    // Row 4 — Rich Chambers (4.7 Infinite AT, type 10)
+    pr(4, 0, "SOFT AMBIENCE", 8), pr(4, 1, "LOCKER ROOM", 8), pr(4, 2, "SNARE CHAMBER", 8),
+    pr(4, 3, "KICK  CHAMBER", 8), pr(4, 4, "MEDIUM ROOM", 8), pr(4, 5, "VOX CHAMBER", 8),
+    pr(4, 6, "OPEN GATE", 8), pr(4, 7, "INFINITE A T", 10),
+    // Row 5 — Rich Plates (four of them)
+    pr(5, 0, "VOX PLATE", 9), pr(5, 1, "PD PLATE", 9), pr(5, 2, "BRASS PLATE", 9),
+    pr(5, 3, "SMALL PLATE", 9),
+    // Row 6 — Inverse Room (V3-only, type 14)
+    pr(6, 0, "INVERSE ROOM", 14), pr(6, 1, "INVERSE 2", 14), pr(6, 2, "HEAD BANGER", 14),
+    pr(6, 3, "SKI JUMP", 14), pr(6, 4, "ATOM SMASHER", 14), pr(6, 5, "GATED ROOM", 14),
+  ];
+
   /* ---- Target firmware ------------------------------------------------- *
-   * The unit runs software V2.0. Confirmed against the V2.0 manual's own MIDI
-   * Implementation Data (ch. 8): the sysex framing, Table 1 (param numbering),
-   * and Table 2 (167-byte bulk layout) are IDENTICAL to V3.00. The V2.0
-   * differences that matter here:
-   *   - Table 3 program types stop at 13 — there is NO type 14 (Inverse Room).
-   *     The Rhythm/BPM types 11–13 (Multiband Rhythm, Chorus & Rhythm, Rhythmic
-   *     Chords) DO exist in V2.0 (beat-sync is switch-driven, not MIDI clock).
-   *   - No MIDI-Clock patch source: the V2.0 MIDI chart shows Clock TX/RX = no,
-   *     and there is no source #70. (The layout tables above are reconciled to
-   *     the V2.0 per-program tables — see HARDWARE-NOTES.md.)
-   * Set FIRMWARE = 3.0 to expose type 14 and the MIDI-Clock source. */
-  const FIRMWARE = 2.0;
+   * Runtime-switchable (UI setting; there is no sysex version query — the
+   * unit only shows its version on the display at power-on). Differences:
+   *   - V2.0 has no type 14 (Inverse Room) and no MIDI-Clock patch source
+   *     (its Rhythm/BPM sync is switch-driven); sending an Inverse Room
+   *     program to a V2.0 unit crashes it.
+   *   - Concert Hall's dump layout differs between firmwares (rows 3/4) —
+   *     layoutFor() resolves per firmware.
+   *   - The factory preset matrix differs entirely — presets() resolves it. */
+  let FIRMWARE = 2.0;
   const V3_ONLY_TYPES = new Set([14]);          // Inverse Room — V3.0 only
   const MIDI_CLOCK_SRC = 70;                     // patch source — V3.0 only
 
+  function setFirmware(v) {
+    FIRMWARE = v;
+    root.PCM70.FIRMWARE = v;
+  }
   function availableTypes() {
     const all = Object.keys(PROGRAM_TYPES).map(Number);
     return FIRMWARE >= 3 ? all : all.filter((t) => !V3_ONLY_TYPES.has(t));
@@ -490,11 +574,23 @@
     const pairs = PATCH_SOURCES.map((name, raw) => [raw, name]);
     return FIRMWARE >= 3 ? pairs : pairs.filter(([raw]) => raw !== MIDI_CLOCK_SRC);
   }
+  // The layout for a program type under the CURRENT firmware.
+  function layoutFor(type) {
+    const t = PROGRAM_TYPES[type];
+    if (!t) return null;
+    return LAYOUTS[(FIRMWARE >= 3 && t.layoutV3) ? t.layoutV3 : t.layout];
+  }
+  // The factory preset matrix under the CURRENT firmware.
+  function presets() { return FIRMWARE >= 3 ? PRESETS_V3 : PRESETS_V2; }
 
   root.PCM70 = {
     FIRMWARE,
+    setFirmware,
+    layoutFor,
+    presets,
     PROGRAM_TYPES,
-    PRESETS,
+    PRESETS_V2,
+    PRESETS_V3,
     PRESET_ROWS,
     LAYOUTS,
     REVERB_TIMES,

@@ -111,6 +111,33 @@ All six V2.0 tables were diffed against the V3.00 data. Only two layouts differe
 directions, store+verify, patch live-sync, and all display curves are
 hardware-checked. Clear for the 3.0.1 ROM swap (back up registers first!).
 
+### Test plan for the first 3.0.1 session (after the ROM swap)
+
+Set the firmware selector in the rack strip to **V3.01** first (persisted; it
+switches layouts, the preset matrix, Inverse Room, and the MIDI Clock source).
+
+- [ ] **Registers survived?** Sweep unit. If the bank was wiped by the swap:
+      Registers tab → **Restore (.syx)** with the pre-swap backup (M PROTECT off);
+      it writes all 50 paced and sweeps to verify.
+- [ ] **Basic protocol re-check**: Get, preset load (new V3 matrix — e.g. 3.0
+      SUSTAIN HALL), a param edit with auto-send. Expect no change (framing is
+      version-identical), but verify.
+- [ ] **Concert Hall V3 layout** (concertHallV3: 4 levels 85–93, 6 delays 99–111,
+      delay master centered 512, voices anchored 400): load a Hall preset, check
+      for ⚠ audit lines, and compare rows 3/4 panel↔app like the V2.0 calibration.
+      Also confirm whether LVL MSTR zero sits at raw 512 (477 anchor) on V3 too.
+- [ ] **Inverse Room** (first ever): load 6.0 INVERSE ROOM — audit lines + panel
+      comparison for the whole layout (Table 9A was transcribed but never
+      verified); check the DURATION-dependent limits behavior (editor does not
+      model them yet).
+- [ ] **Row 6 preset names**: the V3 preset table's row 6 is manual-derived —
+      the load log will report any name mismatches; fix the table from the unit.
+- [ ] **MIDI Clock patch source** (#70): patch it to a BPM program's RATE and
+      confirm the unit follows external clock; check the patch-scale encoding
+      still matches (expected: same firmware family).
+- [ ] **Preset sweep V3**: sweep → library → export a verified V3.01 preset bank
+      (also fills in the true row-6 names/types).
+
 ### Still to confirm on hardware
 - [ ] **BPM-variant limits** (types 11–13): the `bpm` master/voice overrides (448–575 /
       500–524) come from the V3.00 footnotes; the V2.0 footnotes are partly cropped in

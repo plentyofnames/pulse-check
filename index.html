@@ -75,6 +75,11 @@
   .brand .logo { font-weight: 800; font-size: 17px; letter-spacing: 0.02em; }
   .brand .logo u { text-decoration: none; border-bottom: 2px solid var(--ink); padding-bottom: 1px; }
   .brand .sub { font-size: 9.5px; letter-spacing: 0.18em; color: var(--ink-soft); text-transform: uppercase; }
+  .fw-select {
+    font: inherit; letter-spacing: inherit; text-transform: inherit;
+    background: transparent; border: none; padding: 0;
+    color: var(--accent); font-weight: 700; cursor: pointer;
+  }
 
   .vfd {
     background: var(--vfd-bg);
@@ -375,7 +380,12 @@
   <header class="rack">
     <div class="brand">
       <div class="logo"><u>lexicon</u> PCM 70</div>
-      <div class="sub">Digital Effects Processor · V2.00</div>
+      <div class="sub">Digital Effects Processor ·
+        <select id="fwSel" class="fw-select" title="Unit firmware (shown on the display at power-on)">
+          <option value="2">V2.0</option>
+          <option value="3">V3.01</option>
+        </select>
+      </div>
     </div>
 
     <div class="vfd" id="vfd">
@@ -423,6 +433,8 @@
       <div class="lib-foot">
         <button class="btn" id="btnSweep">Sweep unit</button>
         <button class="btn" id="btnBackup">Backup (.syx)</button>
+        <button class="btn" id="btnRestore">Restore (.syx)</button>
+        <input type="file" id="restoreFile" accept=".syx" hidden>
         <button class="btn" id="btnSweepPresets">Sweep → library</button>
         <button class="btn" id="btnSaveLib">Save current</button>
         <button class="btn" id="btnImport">Import .syx</button>
@@ -664,7 +676,7 @@ const Store = {
   _emit(change) { if (this._onChange) this._onChange(change); },
 
   typeInfo() { return DATA.PROGRAM_TYPES[this.prog.type]; },
-  layout() { return DATA.LAYOUTS[this.typeInfo().layout]; },
+  layout() { return DATA.layoutFor(this.prog.type); },
   metas() { const o = []; for (const g of this.layout()) for (const e of g.params) o.push(e); return o; },
   sizeMeta() { return this.metas().find(m => m.kind === "size") || null; },
   ctx() { const sm = this.sizeMeta(); return { type: this.prog.type, sizeRaw: sm ? this.prog.words[sm.word] : null }; },
@@ -698,7 +710,7 @@ const Store = {
   // A neutral starting program (midpoint of every param's range).
   makeDefault(type = 7) {
     const words = new Uint16Array(60);
-    for (const g of DATA.LAYOUTS[DATA.PROGRAM_TYPES[type].layout]) {
+    for (const g of DATA.layoutFor(type)) {
       for (const e of g.params) words[e.word] = Math.round((e.rawMin + e.rawMax) / 2);
     }
     return {
@@ -743,6 +755,20 @@ const UI = {
     t.addEventListener("click", flip);
     t.addEventListener("keydown", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); flip(); } });
   },
+  initFirmware() {
+    const sel = document.getElementById("fwSel");
+    const KEY = "pcm70.firmware";
+    const apply = (v) => DATA.setFirmware(v === "3" ? 3.0 : 2.0);
+    sel.value = localStorage.getItem(KEY) || "2";
+    apply(sel.value);
+    sel.addEventListener("change", () => {
+      localStorage.setItem(KEY, sel.value);
+      apply(sel.value);
+      Log.info(`Firmware set to ${sel.value === "3" ? "V3.01" : "V2.0"} — layouts, presets, and gates switched.`);
+      this.renderAll(); // layout + preset matrix + patch sources may all change
+    });
+  },
+
   initChannelSelect() {
     const sel = document.getElementById("midiCh");
     for (let i = 1; i <= 16; i++) {
@@ -906,7 +932,7 @@ const UI = {
 
   /* ------- librarian: Registers / Presets / Library tabs ---------------- */
   _typeChip: { 4: "Echo", 5: "Delay", 6: "Chord", 7: "Hall", 8: "Chmbr", 9: "Plate",
-               10: "Inf", 11: "RhyDly", 12: "RhyCho", 13: "RhyChd" },
+               10: "Inf", 11: "RhyDly", 12: "RhyCho", 13: "RhyChd", 14: "Inv" },
 
   initLibrarian() {
     this._libTab = "presets";
@@ -918,6 +944,12 @@ const UI = {
     document.getElementById("btnSweepPresets").addEventListener("click", () => Librarian.sweepPresets());
     document.getElementById("btnSaveLib").addEventListener("click", () => Librarian.saveCurrent());
     document.getElementById("btnExportLib").addEventListener("click", () => Librarian.exportLibrary());
+    const restoreInput = document.getElementById("restoreFile");
+    document.getElementById("btnRestore").addEventListener("click", () => restoreInput.click());
+    restoreInput.addEventListener("change", async () => {
+      if (restoreInput.files[0]) Librarian.restoreBank(await restoreInput.files[0].arrayBuffer(), restoreInput.files[0].name);
+      restoreInput.value = "";
+    });
     const fileInput = document.getElementById("importFile");
     document.getElementById("btnImport").addEventListener("click", () => fileInput.click());
     fileInput.addEventListener("change", async () => {
@@ -942,17 +974,19 @@ const UI = {
     const show = (id, on) => { document.getElementById(id).style.display = on ? "" : "none"; };
     show("btnSweep", tab === "registers");
     show("btnBackup", tab === "registers");
+    show("btnRestore", tab === "registers");
     show("btnSweepPresets", tab === "presets");
     show("btnSaveLib", tab === "library");
     show("btnImport", tab === "library");
     show("btnExportLib", tab === "library");
     document.getElementById("btnSweep").disabled = Librarian.sweeping;
+    document.getElementById("btnRestore").disabled = Librarian.sweeping;
     document.getElementById("btnSweepPresets").disabled = Librarian.sweeping;
     const list = document.getElementById("libList");
     list.innerHTML = "";
 
     if (tab === "presets") {
-      for (const p of DATA.PRESETS) {
+      for (const p of DATA.presets()) {
         const li = this._el("li");
         if (Store.origin.kind === "preset" && Store.origin.id === p.num) li.classList.add("on");
         li.append(
@@ -1534,13 +1568,13 @@ const Librarian = {
     if (!(Midi.out && Midi.in)) { Log.info("Preset sweep: connect MIDI first."); return; }
     this.sweeping = true;
     UI.renderLibrarian();
-    Log.info(`Preset sweep: loading ${DATA.PRESETS.length} factory presets one by one (audio will hiccup)…`);
+    Log.info(`Preset sweep: loading ${DATA.presets().length} factory presets one by one (audio will hiccup)…`);
     if (!UI.blockV3Send()) {
       Midi.sendNow(Sysex.buildBulkData(Midi.channel(), { stored: false, reg: 50, data167: Codec.encodeProgram(Store.prog) }));
       await sleep(300);
     }
     let ok = 0, fail = 0;
-    for (const p of DATA.PRESETS) {
+    for (const p of DATA.presets()) {
       try {
         Midi.sendNow(new Uint8Array([0xc0 | Midi.channel(), p.pc & 0x7f]));
         let prog = null, data = null, match = false;
@@ -1599,6 +1633,49 @@ const Librarian = {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     Log.info(`Export: wrote ${parts.length} programs to ${fn}.`);
+  },
+
+  // Write a backup .syx's stored-register dumps back onto the unit, then
+  // sweep to verify. Registers live in battery RAM — this is the recovery
+  // path after a ROM swap or battery failure.
+  async restoreBank(buf, label) {
+    if (this.sweeping) return;
+    if (!(Midi.out && Midi.in)) { Log.info("Restore: connect MIDI first."); return; }
+    const bytes = new Uint8Array(buf);
+    const found = [];
+    let i = 0;
+    while (i < bytes.length) {
+      if (bytes[i] !== 0xf0) { i++; continue; }
+      let j = i + 1;
+      while (j < bytes.length && bytes[j] !== 0xf7) j++;
+      if (j >= bytes.length) break;
+      const parsed = Sysex.parse(bytes.slice(i, j + 1));
+      i = j + 1;
+      if (parsed && parsed.kind === "bulk" && parsed.stored && parsed.checksumOk && parsed.data167) {
+        found.push({ reg: parsed.reg, data: parsed.data167 });
+      }
+    }
+    if (!found.length) { Log.info(`Restore ${label}: no stored-register dumps in the file.`); return; }
+    if (!window.confirm(`Overwrite ${found.length} hardware registers from ${label}? (M PROTECT must be OFF on the unit.)`)) return;
+    this.sweeping = true;
+    UI.renderLibrarian();
+    Log.info(`Restore: writing ${found.length} registers (paced)…`);
+    for (const f of found) {
+      Midi.sendNow(Sysex.buildBulkData(Midi.channel(), { stored: true, reg: f.reg, data167: f.data }));
+      await sleep(100); // 3× the manual's 30 ms floor — writes go to battery RAM
+    }
+    this.sweeping = false;
+    Log.info("Restore: all registers sent — sweeping to verify…");
+    await this.sweep();
+    const bad = found.filter(f => {
+      const e = this.regs[f.reg];
+      return !(e && e.data.length === f.data.length && e.data.every((b, k) => b === f.data[k]));
+    });
+    if (bad.length) {
+      Log.info(`⚠ Restore verify: ${bad.length} registers differ (${bad.map(f => this.regLabel(f.reg)).join(", ")}). M PROTECT on?`);
+    } else {
+      Log.info(`✓ Restore verified: all ${found.length} registers match ${label}.`);
+    }
   },
 
   // Full-bank .syx download from the register cache (sweeps first if needed).
@@ -1703,6 +1780,7 @@ window.addEventListener("DOMContentLoaded", () => {
   Librarian.init();
   UI.initTheme();
   UI.initToggles();
+  UI.initFirmware();
   UI.initChannelSelect();
   UI.initMidi();
   UI.initTransfer();
