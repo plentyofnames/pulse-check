@@ -172,8 +172,13 @@ switches layouts, the preset matrix, Inverse Room, and the MIDI Clock source).
       tempo tracking needs the destination RATE BPM stored at 64 (val 0) —
       which is exactly how the factory clock-patched presets ship (AUTO BOUNCE
       base 64 tracks 1:1; BONANZA's base 114 yields clock + 50).
-- [ ] **Preset sweep V3**: sweep → library → export a verified V3.01 preset bank
-      (also fills in the true row-6 names/types).
+- [x] **Preset sweep V3 — done 2026-07-19**: all 42 factory presets swept into
+      the library with zero name mismatches; the working copy was re-sent to
+      the unit afterwards. Export the library for the on-disk V3.01 bank.
+
+**3.0.1 validation complete 2026-07-19.** Both firmwares are now fully
+hardware-verified: protocol, layouts, display curves, Dynamic MIDI (incl.
+MIDI Clock and offset semantics), librarian read/write, preset matrices.
 
 ### Still to confirm on hardware
 - [ ] **BPM-variant limits** (types 11–13): the `bpm` master/voice overrides (448–575 /
