@@ -180,6 +180,24 @@ switches layouts, the preset matrix, Inverse Room, and the MIDI Clock source).
 hardware-verified: protocol, layouts, display curves, Dynamic MIDI (incl.
 MIDI Clock and offset semantics), librarian read/write, preset matrices.
 
+### Worth a double check (from the 2026-07-19 full-bank audit, next session)
+
+Four quick panel readings; everything else the audit flagged matches the
+established out-of-range-factory-data pattern and displays panel-correct.
+
+- [ ] **FOR STRINGS** → 0.5 HC and 0.6 DIFFUSION. Expect **8.19 kHz** / **99** —
+      the distinctive-value confirmation of the HC@55/DIFFUSION@57 byte swap.
+- [ ] **MAJOR MOD** → 0.5 HFC LEFT (raw 523). **10.0 kHz** would mean the HFC
+      530 anchor is Rhythmic-Chords(13)-only and type 6 keeps 496 → implement
+      as a BPM-variant override like the delay ranges. While there: 2.1 V1
+      PITCH's note name decides whether the −62 pitch shift is also 13-only.
+- [ ] **VOX CHAMBER** → 1.0 / 1.1 / 1.2 (raws 494/469/454, all below range).
+      Expect clamped ~0.21 s / 0.21 s / bottom XOVER matching the app — else
+      something new is going on in that program's row 1.
+- [ ] **PD PLATE** → 1.0 RT LOW (raw 519, two above the plate's 517 max).
+      Panel at the 63 s-ish max = clamping factory data; a distinct value =
+      the plate RT anchor needs a nudge.
+
 ### Still to confirm on hardware
 - [ ] **BPM-variant limits** (types 11–13): the `bpm` master/voice overrides (448–575 /
       500–524) come from the V3.00 footnotes; the V2.0 footnotes are partly cropped in
