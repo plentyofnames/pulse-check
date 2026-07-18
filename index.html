@@ -1400,6 +1400,11 @@ const UI = {
     for (const [raw, name] of DATA.patchSources()) {
       const o = this._el("option", null, name); o.value = raw; srcSel.appendChild(o);
     }
+    // keep sources the current firmware doesn't list visible, not silently OFF
+    if (![...srcSel.options].some(o => o.value === String(patch.src))) {
+      const o = this._el("option", null, `src ${patch.src} (n/a)`);
+      o.value = patch.src; srcSel.appendChild(o);
+    }
     srcSel.value = String(patch.src);
     srcSel.addEventListener("change", () => this._commitPatch(i, { src: parseInt(srcSel.value, 10) }));
     row.appendChild(srcSel);
