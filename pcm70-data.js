@@ -603,9 +603,11 @@
     pr(4, 0, "SOFT AMBIENCE", 8), pr(4, 1, "LOCKER ROOM", 8), pr(4, 2, "SNARE CHAMBER", 8),
     pr(4, 3, "KICK  CHAMBER", 8), pr(4, 4, "MEDIUM ROOM", 8), pr(4, 5, "VOX CHAMBER", 8),
     pr(4, 6, "OPEN GATE", 8), pr(4, 7, "INFINITE A T", 10),
-    // Row 5 — Rich Plates (four of them)
+    // Row 5 — Rich Plates. Only THREE on the ROM: PC 103 (5.3) is ignored by
+    // the unit (hw 2026-07-19), matching the manual's matrix and its
+    // "PC 50–115 = 0.0–6.5" note (42 cells). The V3 bank file's 37th program
+    // (SMALL PLATE) is a bonus copy of V2.0's, not a factory V3 preset.
     pr(5, 0, "VOX PLATE", 9), pr(5, 1, "PD PLATE", 9), pr(5, 2, "BRASS PLATE", 9),
-    pr(5, 3, "SMALL PLATE", 9),
     // Row 6 — Inverse Room (V3-only, type 14)
     pr(6, 0, "INVERSE ROOM", 14), pr(6, 1, "INVERSE 2", 14), pr(6, 2, "HEAD BANGER", 14),
     pr(6, 3, "SKI JUMP", 14), pr(6, 4, "ATOM SMASHER", 14), pr(6, 5, "GATED ROOM", 14),
