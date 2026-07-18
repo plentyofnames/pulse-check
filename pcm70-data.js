@@ -324,7 +324,7 @@
         p(2, "DEFINITION", 83, 462, 561, "plain"),
       ]},
       { row: 3, label: "Reflection levels", params: [
-        p(0, "REFL LVL MSTR", 85, 472, 547, "signed", { dispMin: -35, dispMax: 35 }),
+        p(0, "REFL LVL MSTR", 85, 477, 547, "signed", { dispMin: -35, dispMax: 35 }), // 0 @ raw 512; printed 472 is a misprint (hw: Hall, Inv Room)
         p(1, "REFL L1", 87, 495, 530, "level"),
         p(2, "REFL L2", 89, 495, 530, "level"),
         p(3, "REFL L3", 91, 495, 530, "level"),
@@ -376,7 +376,7 @@
         p(2, "DEFINITION", 83, 462, 561, "plain"),
       ]},
       { row: 3, label: "Reflection levels", params: [
-        p(0, "REFL LVL MSTR", 85, 472, 547, "signed", { dispMin: -35, dispMax: 35 }),
+        p(0, "REFL LVL MSTR", 85, 477, 547, "signed", { dispMin: -35, dispMax: 35 }), // 0 @ raw 512; printed 472 is a misprint (hw: Hall, Inv Room)
         p(1, "REFL L1", 87, 495, 530, "level"),
         p(2, "REFL L2", 89, 495, 530, "level"),
         p(3, "REFL L3", 91, 495, 530, "level"),
@@ -412,7 +412,7 @@
         p(2, "DEFINITION", 71, 462, 561, "plain"),
       ]},
       { row: 2, label: "Reflection levels", params: [
-        p(0, "REFL LVL MSTR", 73, 472, 547, "signed", { dispMin: -35, dispMax: 35 }),
+        p(0, "REFL LVL MSTR", 73, 477, 547, "signed", { dispMin: -35, dispMax: 35 }), // 0 @ raw 512; printed 472 is a misprint (hw: Hall, Inv Room)
         p(1, "REFL L1", 75, 495, 530, "level"),
         p(2, "REFL L2", 77, 495, 530, "level"),
         p(3, "REFL L3", 79, 495, 530, "level"),
@@ -453,7 +453,7 @@
         p(2, "DEFINITION", 83, 462, 561, "plain"),
       ]},
       { row: 3, label: "Reflection levels", params: [
-        p(0, "REFL LVL MSTR", 85, 472, 547, "signed", { dispMin: -35, dispMax: 35 }),
+        p(0, "REFL LVL MSTR", 85, 477, 547, "signed", { dispMin: -35, dispMax: 35 }), // 0 @ raw 512; printed 472 is a misprint (hw: Hall, Inv Room)
         p(1, "REFL L1", 87, 495, 530, "level"),
         p(2, "REFL L2", 89, 495, 530, "level"),
         p(3, "REFL L3", 91, 495, 530, "level"),
