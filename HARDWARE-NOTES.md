@@ -123,9 +123,15 @@ switches layouts, the preset matrix, Inverse Room, and the MIDI Clock source).
       panel↔app comparison + words dumps). 3.0.1 reality vs the V3.00 ch6 table:
       - Rows 3/4 are master + FOUR voices each (3.5/3.6 and 4.5/4.6 unavailable
         on the panel; bytes 95/97/109/111 unused). LVL MSTR 477 anchor holds.
-      - Delay master centered raw 400 (like V2.0 — printed 206–818 wrong on
-        both firmwares); delay voices anchored raw 512 (like V2.0, not the
-        printed 400).
+      - ~~Delay master centered raw 400, voices anchored 512~~ **CORRECTED
+        2026-07-19 via CONCERT WAVE** (SUSTAIN HALL's all-zero reflections had
+        underdetermined the mapping): the delay block starts at **byte 95**,
+        directly after the levels — MSTR@95 centered raw **512** (printed
+        encoding; center-400 is V2.0-only), voices @97–103 anchored raw **400**
+        (564→132 ms, 614→264, 647→396, 548→100, all exact). Bytes 105–111
+        unused (constant 512). Lesson repeated: degenerate (all-zero) programs
+        cannot validate a byte mapping — always confirm with a program that has
+        distinct values.
       - **Running RT LOW/MID range is 493–524** — three raw steps below V2.0's
         496–527, same 32-entry Table 11 span (five calibration pairs incl. both
         ends: 0.45 s @493 … 63 s @524, time factor 45 at SIZE raw 534). Stopped

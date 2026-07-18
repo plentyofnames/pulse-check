@@ -281,17 +281,19 @@
         p(4, "REFL R2", 93, 495, 530, "level"),
       ]},
       { row: 4, label: "Reflection delays", params: [
-        // Hardware-calibrated on 3.0.1 (SUSTAIN HALL, 2026-07-19): master
-        // centered raw 400 (panel 0 there — printed 206–818/center-512 wrong
-        // on BOTH firmwares), voices anchored raw 512 like V2.0 (panel 0 at
-        // 512 AND at below-range 400), and only FOUR voices — the panel says
-        // 4.5/4.6 unavailable, so bytes 109/111 are unused on 3.0.1. The
-        // V3.00 ch6 table (6 voices, 400 anchor) is refuted on this firmware.
-        p(0, "REFL DLY MSTR", 99, 94, 706, "signed", { dispMin: -306, dispMax: 306, unit: "ms" }),
-        p(1, "REFL L1", 101, 512, 736, "delay"),
-        p(2, "REFL L2", 103, 512, 736, "delay"),
-        p(3, "REFL R1", 105, 512, 736, "delay"),
-        p(4, "REFL R2", 107, 512, 736, "delay"),
+        // Hardware-calibrated on 3.0.1 (CONCERT WAVE words + panel,
+        // 2026-07-19): the delay block starts at byte 95, right after the
+        // levels — MSTR@95 centered raw 512, four voices @97–103 anchored
+        // raw 400 (564→132 ms, 614→264, 647→396, 548→100 exact). Bytes
+        // 105–111 are unused (constant 512). SUSTAIN HALL's all-zero
+        // reflections fit too (512@95 → 0; 400×4 @97–103 → 000 ms) — its
+        // degenerate zeros were what made the earlier mapping guess wrong.
+        // The V2.0-style center-400 master is V2.0-Concert-Hall-only.
+        p(0, "REFL DLY MSTR", 95, 206, 818, "signed", { dispMin: -306, dispMax: 306, unit: "ms" }),
+        p(1, "REFL L1", 97, 400, 624, "delay"),
+        p(2, "REFL L2", 99, 400, 624, "delay"),
+        p(3, "REFL R1", 101, 400, 624, "delay"),
+        p(4, "REFL R2", 103, 400, 624, "delay"),
       ]},
     ],
 
