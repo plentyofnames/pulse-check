@@ -141,11 +141,11 @@ switches layouts, the preset matrix, Inverse Room, and the MIDI Clock source).
       spans the full Table 11), so V2.0 may have had the same anchors,
       unverified (V2.0 running RTs were never panel-compared). Plate gets
       richPlateV3; stopped RTs are 496 everywhere.
-      Still open on V3: Infinite Reverb's REV TIME anchor (check INFINITE A T
-      vs panel), and Chamber/Plate rows 3/4 (delay-master center 400-vs-512 is
-      ambiguous in the SOFT AMBIENCE/VOX PLATE dumps — both read 512/values
-      that display 0 either way; needs a panel comparison with non-zero
-      reflections).
+      Follow-ups resolved 2026-07-19, all matching the app with no changes:
+      Infinite REV TIME anchor is 496 (INFINITE A T: 3.15/3.57/5.04 ≙ panel
+      3.2/3.6/5.0), and the Chamber/Plate delay masters use the printed
+      center-512 encoding (+8/+17/+7 exact) — Concert Hall's center-400
+      delay master is unique to Concert Hall.
 - [ ] **Inverse Room** (first ever): load 6.0 INVERSE ROOM — audit lines + panel
       comparison for the whole layout (Table 9A was transcribed but never
       verified); check the DURATION-dependent limits behavior (editor does not
