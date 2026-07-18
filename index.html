@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PCM 70 Editor</title>
+<title>Pulse Check · Lexicon PCM 70 Editor</title>
 <style>
   :root {
     /* light — "silkscreen on aluminum" */
@@ -500,7 +500,7 @@
 
   <!-- sysex console -->
   <div class="console" id="console">
-    <div class="line"><span class="dim">Console ready — TX/RX will appear here.</span></div>
+    <div class="line"><span class="dim">Pulse Check ready — TX/RX will appear here.</span></div>
   </div>
 </div>
 
@@ -1828,7 +1828,7 @@ const Log = {
     const recent = this._lines.slice(-40);
     if (recent.length === 0) {
       const d = document.createElement("div");
-      d.className = "line"; d.innerHTML = '<span class="dim">Console ready — TX/RX will appear here.</span>';
+      d.className = "line"; d.innerHTML = '<span class="dim">Pulse Check ready — TX/RX will appear here.</span>';
       this._el.appendChild(d);
       return;
     }
