@@ -117,6 +117,16 @@
     outline: 2px solid var(--accent); outline-offset: 1px;
   }
 
+  .clock-wrap { display: flex; gap: 4px; align-items: center; }
+  .clock-wrap input {
+    width: 52px; background: var(--well); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 4px; padding: 5px 6px;
+    font: inherit; font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .clock-wrap .btn { padding: 5px 9px; }
+  .clock-wrap .btn.running { background: var(--accent); border-color: var(--accent); color: var(--btn-ink); }
+
   .led-field { display: flex; align-items: center; gap: 7px; align-self: flex-end; padding-bottom: 6px; }
   .led {
     width: 9px; height: 9px; border-radius: 50%;
@@ -410,6 +420,13 @@
     <div class="led-field"><span class="led" id="connLed"></span><span class="txt" id="connTxt">Offline</span></div>
 
     <div class="toggle" id="autoSend" role="switch" aria-checked="true" tabindex="0"><span class="sw"></span> Auto-send</div>
+    <div class="field">
+      <label for="clockBpm">MIDI clock</label>
+      <span class="clock-wrap">
+        <input id="clockBpm" type="number" min="40" max="250" value="120">
+        <button class="btn icon" id="clockToggle" title="Start / stop MIDI clock">▶</button>
+      </span>
+    </div>
     <div class="btn-group">
       <button class="btn" id="btnGet">Get</button>
       <button class="btn primary" id="btnPut">Put</button>
@@ -663,6 +680,49 @@ const Midi = {
   },
 };
 
+/* ---- 4b. Clock --------------------------------------------------------- */
+// MIDI clock generator (24 ppqn) for driving/testing the V3 MIDI Clock patch
+// source. Ticks are scheduled ~250 ms ahead with Web MIDI timestamps, so
+// browser-timer jitter doesn't reach the wire. Ticks bypass the TX log.
+const Clock = {
+  running: false,
+  _timer: null,
+  _next: 0,
+
+  bpm() {
+    const v = parseInt(document.getElementById("clockBpm").value, 10);
+    return isFinite(v) ? Math.max(40, Math.min(250, v)) : 120;
+  },
+  start() {
+    if (!Midi.out) { Log.info("Clock: no MIDI out selected."); return; }
+    this.running = true;
+    Midi.out.send([0xfa]); // Start (the unit recognizes Start per the MIDI chart)
+    this._next = performance.now() + 5;
+    this._pump();
+    this._timer = setInterval(() => this._pump(), 100);
+    Log.info(`MIDI clock started at ${this.bpm()} BPM (change the number live).`);
+    document.getElementById("clockToggle").textContent = "■";
+    document.getElementById("clockToggle").classList.add("running");
+  },
+  stop() {
+    this.running = false;
+    clearInterval(this._timer);
+    if (Midi.out) { try { Midi.out.send([0xfc]); } catch (e) {} } // Stop
+    Log.info("MIDI clock stopped.");
+    document.getElementById("clockToggle").textContent = "▶";
+    document.getElementById("clockToggle").classList.remove("running");
+  },
+  _pump() {
+    if (!this.running || !Midi.out) return;
+    const horizon = performance.now() + 250;
+    const interval = 60000 / (this.bpm() * 24); // ms per tick, live-tracks the input
+    while (this._next < horizon) {
+      try { Midi.out.send([0xf8], this._next); } catch (e) { /* port gone */ }
+      this._next += interval;
+    }
+  },
+};
+
 /* ---- 5. Store --------------------------------------------------------- */
 // The working copy is the single source of truth for the UI. Every mutation
 // goes through a setter that flips `dirty` and fires one onChange → render.
@@ -755,6 +815,12 @@ const UI = {
     t.addEventListener("click", flip);
     t.addEventListener("keydown", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); flip(); } });
   },
+  initClock() {
+    document.getElementById("clockToggle").addEventListener("click", () => {
+      Clock.running ? Clock.stop() : Clock.start();
+    });
+  },
+
   initFirmware() {
     const sel = document.getElementById("fwSel");
     const KEY = "pcm70.firmware";
@@ -1781,6 +1847,7 @@ window.addEventListener("DOMContentLoaded", () => {
   UI.initTheme();
   UI.initToggles();
   UI.initFirmware();
+  UI.initClock();
   UI.initChannelSelect();
   UI.initMidi();
   UI.initTransfer();
