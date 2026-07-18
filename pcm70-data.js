@@ -404,10 +404,17 @@
   const DELAY_SAMPLES = root.PCM70_TABLE14 || [];
 
   /* ---- Patch source enumeration (manual 6-5 / formula 11) -------------- */
-  // Index = raw source byte value.
+  // Index = raw source byte value. The unit's own display names controllers
+  // (hardware-observed: CC7 → "VOLUME", CC6 → "DATA ENTR"), so label the
+  // standard ones the same way.
+  // Abbreviated to fit the patch-bay selects (~13 chars incl. "Ctrl NN ").
+  const CC_NAMES = {
+    1: "Mod", 2: "Breath", 4: "Foot", 5: "Porta",
+    6: "Data", 7: "Vol", 8: "Bal", 10: "Pan", 11: "Expr",
+  };
   const PATCH_SOURCES = (() => {
     const list = ["OFF"];
-    for (let i = 0; i <= 31; i++) list.push(`Ctrl ${i}`);        // 1–32
+    for (let i = 0; i <= 31; i++) list.push(CC_NAMES[i] ? `Ctrl ${i} ${CC_NAMES[i]}` : `Ctrl ${i}`); // 1–32
     for (let i = 64; i <= 95; i++) list.push(`Switch ${i}`);     // 33–64
     list.push("Pitch Wheel");    // 65
     list.push("After Touch");    // 66

@@ -162,10 +162,13 @@
   const SRC_OFF = 17, DEST_OFF = 27, SCALE_OFF = 37, PATCH_N = 10;
   const WORDS_OFF = 47, WORDS_N = 60;
 
-  // Scale factor raw byte ⇄ signed (manual 6-5): 0–127 → −128…−1, 128–255 → +1…+128.
+  // Scale factor raw byte ⇄ signed. HARDWARE-CALIBRATED 2026-07-18: the manual's
+  // formula 13 (0–127 → −128…−1, 128–255 → +1…+128) is printed exactly backwards.
+  // The real encoding is a signed byte with no zero: raw 76 displays +77 and raw
+  // 159 displays −97 on the unit, i.e. 0–127 → +1…+128, 128–255 → −128…−1.
   // Bijective over 0..255 (there is no 0). Verified by round-trip test.
-  function scaleToSigned(raw) { return raw <= 127 ? raw - 128 : raw - 127; }
-  function scaleFromSigned(s) { return s < 0 ? s + 128 : s + 127; }
+  function scaleToSigned(raw) { return raw < 128 ? raw + 1 : raw - 256; }
+  function scaleFromSigned(s) { return s > 0 ? s - 1 : s + 256; }
 
   function decodeName(data) {
     let s = "";
@@ -343,9 +346,9 @@
 
         case "fxdb": case "linear": case "signed": case "pct": {
           // BPM variants replace the delay/predelay master with RATE BPM
-          // (448–575). The step→BPM mapping is uncalibrated — show the raw
-          // step until a hardware comparison pins it down (HARDWARE-NOTES).
-          if (bpmActive) return wrap(`rate ${val}`, val);
+          // (448–575 → 64–191 BPM). Hardware-calibrated 2026-07-18: two
+          // editor↔panel pairs (val 36 → 100 BPM, val 54 → 118) give BPM = val+64.
+          if (bpmActive) return wrap(`${val + 64} BPM`, val + 64);
           const n = Math.round(this._lin(meta, raw, limits)); // manual shows integer steps
           const sign = (meta.dispMin < 0 && n > 0) ? "+" : "";
           return wrap(sign + n + (meta.unit ? " " + meta.unit : ""), n);
@@ -378,7 +381,17 @@
           const s = this._sig3(t);
           return wrap(s + " s", s);
         }
-        case "revtime": return wrap(val >= (meta.rawMax - meta.rawMin) ? "INF" : this._sig3(val * 0.04 + 0.04) + " s", null);
+        case "revtime": {
+          // Infinite Reverb REV TIME = the size-dependent Table 11 formula
+          // (like rtime), INF past the table's end. Hardware-calibrated
+          // 2026-07-18: val 25 → 3.9 s, val 31 → 32 s, val 32 → INF (panel),
+          // matching timeFactor 23 at factory SIZE (max).
+          if (val >= D.REVERB_TIMES.length) return wrap("INF", null);
+          const sp = this._sp(ctx.type);
+          const timeFactor = Math.round(this._sizeFactor(ctx) * sp.timeConst / 1000);
+          const t = this._sig3(timeFactor * this._tbl(D.REVERB_TIMES, val) / 500);
+          return wrap(t + " s", t);
+        }
         case "gate": {
           if (raw >= meta.rawMax) return wrap("OFF", null);
           const ms = val * 18;

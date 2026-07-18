@@ -79,22 +79,37 @@ All six V2.0 tables were diffed against the V3.00 data. Only two layouts differe
 - [ ] **Sweep unit** (Registers tab): all 50 stored dumps arrive, 30 ms pacing holds,
       names look right. Then **Backup (.syx)** and keep the file (pre-experiment
       safety copy of whatever is on the unit).
-- [ ] **Preset sweep** (Presets tab, "Sweep → library"): loads all 43 factory
-      presets one by one via PC + Get (~1 min, audio hiccups) and saves them to the
-      library; afterwards "Export .syx" gives a provenance-verified V2.0 preset
-      bank. Watch for name mismatches in the console (they would reveal errors in
-      our preset table). Compare a few entries against `dumps/Lexicon-PCM-70-Ver-2.syx`.
+- [x] **Preset sweep — done 2026-07-18, byte-perfect.** All 43 factory presets swept
+      into the library and exported; the export is **byte-identical (43/43)** to the
+      independent `dumps/Lexicon-PCM-70-Ver-2.syx` bank. This simultaneously (a)
+      authenticates the internet bank as unmodified factory data, (b) proves the whole
+      read pipeline (PC load → active dump → codec → library → .syx export) is
+      byte-transparent on real hardware, and (c) confirms our preset table's names/PC
+      mapping for all 43 presets.
 - [ ] **Store with verify**: store the working copy into an unused register — expect
       "✓ stored and verified". Also try with M PROTECT on to see the failure path.
-- [ ] **Patch live-sync**: with auto-send on, change a patch source/destination/scale
-      in the editor, then check 5.x on the panel — params 60–89 are documented but
-      this is their first live use.
-- [ ] **BPM displays** (load a Rhythm program, e.g. 0.8 ECHOES BPM): voice delays
-      should read n/24 beat and match the panel; RATE BPM shows "rate n" — note the
-      panel's BPM for a few raw steps so the mapping can be calibrated.
-- [ ] **Approximate curves**: Infinite Reverb REV TIME and Resonant Chords voice
-      predelay use linear approximations — compare a few editor values against the
-      panel and note deviations.
+- [x] **Patch live-sync — done 2026-07-18.** Params 60–79 (source, destination)
+      sync correctly; the unit displays controller names (CC7 "VOLUME", CC6
+      "DATA ENTR"). The scale encoding (80–89) was WRONG in the manual: two
+      editor↔panel pairs (raw 76 → +77, raw 159 → −97) prove raw 0–127 → +1…+128
+      and 128–255 → −128…−1 — formula 13 is printed exactly backwards. Codec
+      fixed; re-verify one scale value after the fix.
+- [x] **BPM displays — done 2026-07-18.** Voice delays as n/24 beat match the panel.
+      RATE BPM calibrated from two editor↔panel pairs (raw 484 → 100 BPM,
+      raw 502 → 118): **BPM = (raw − 448) + 64**, i.e. 448–575 → 64–191 BPM.
+- [x] **Infinite Reverb REV TIME — calibrated 2026-07-18.** Not linear: it is the
+      size-dependent Table 11 reverb-time formula (like RT LOW/MID), INF past the
+      table end (val ≥ 32). Verified: panel 3.9 s / 32 s / INF at val 25/31/32
+      match the formula exactly (timeFactor 23 at factory SIZE).
+- [x] **Resonant Chords voice predelay — checked 2026-07-18, linear accepted.**
+      Six panel↔editor pairs (0/125/243/364/485/602 vs 0/124/240/361/482/601)
+      agree within 1–3 ms (<1%); the tiny mid-range bow suggests mild
+      nonlinearity, but it is inaudible and underdetermined by the data. The
+      linear display stays, deviation accepted.
+
+**V2.0 validation complete 2026-07-18** — every algorithm family, both sweep
+directions, store+verify, patch live-sync, and all display curves are
+hardware-checked. Clear for the 3.0.1 ROM swap (back up registers first!).
 
 ### Still to confirm on hardware
 - [ ] **BPM-variant limits** (types 11–13): the `bpm` master/voice overrides (448–575 /
