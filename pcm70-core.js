@@ -355,8 +355,11 @@
             return wrap(`${b} BPM`, b);
           }
           // clamp to the display range like the hardware (factory data stores
-          // below-range raws; e.g. CONCERT WAVE LVL MSTR raw 469 shows −35)
-          let n = Math.round(this._lin(meta, raw, limits));
+          // below-range raws; e.g. CONCERT WAVE LVL MSTR raw 469 shows −35).
+          // meta.trunc: params whose firmware truncates fractional steps
+          // (hardware-proven for Inverse Room DURATION).
+          let n = meta.trunc ? Math.floor(this._lin(meta, raw, limits))
+                             : Math.round(this._lin(meta, raw, limits));
           n = Math.max(meta.dispMin, Math.min(meta.dispMax, n));
           const sign = (meta.dispMin < 0 && n > 0) ? "+" : "";
           return wrap(sign + n + (meta.unit ? " " + meta.unit : ""), n);

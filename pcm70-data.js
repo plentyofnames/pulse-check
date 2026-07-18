@@ -437,7 +437,10 @@
         p(0, "MIX",       47, 462, 562, "mix"),
         p(1, "FX ADJ",    49, 461, 563, "fxdb", { dispMin: -90, dispMax: 12, unit: "dB" }), // 1 dB/step, 0 dB @ raw 551 (hw 2026-07-19); printed "-80" is a misprint
         p(2, "SOFT KNOB", 51, 448, 575, "softknob"),
-        p(3, "DURATION",  53, 493, 531, "linear", { dispMin: 102, dispMax: 600, unit: "ms" }),
+        // Hardware endpoints 2026-07-19: raw 493→120 ms, 531→600 ms, truncating
+        // display (514→385, 518→435 exact). The manual's "102" minimum is a
+        // digit-transposed misprint of 120.
+        p(3, "DURATION",  53, 493, 531, "linear", { dispMin: 120, dispMax: 600, unit: "ms", trunc: true }),
         p(4, "PDELAY",    57, 385, 638, "predelay"),
         p(5, "HC",        59, 497, 527, "freq"),
       ]},

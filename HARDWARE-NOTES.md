@@ -152,12 +152,15 @@ switches layouts, the preset matrix, Inverse Room, and the MIDI Clock source).
       3.2/3.6/5.0), and the Chamber/Plate delay masters use the printed
       center-512 encoding (+8/+17/+7 exact) — Concert Hall's center-400
       delay master is unique to Concert Hall.
-- [ ] **Inverse Room** (first ever): load 6.0 INVERSE ROOM — audit lines + panel
-      comparison for the whole layout (Table 9A was transcribed but never
-      verified); check the DURATION-dependent limits behavior (editor does not
-      model them yet).
-- [ ] **Row 6 preset names**: the V3 preset table's row 6 is manual-derived —
-      the load log will report any name mismatches; fix the table from the unit.
+- [x] **Inverse Room — verified 2026-07-19** (6.0 + ATOM SMASHER with distinct
+      reflection values): layout rows/bytes all match the panel, incl. rows 3/4
+      (6+6 reflections). **DURATION calibrated by endpoints**: raw 493–531 →
+      **120–600 ms** linear (12.63 ms/step), truncating display — 493→120,
+      499→195, 514→385, 518→435, 531→600 all exact. The manual's "102 ms"
+      minimum is a digit-transposed misprint of 120. (DURATION-dependent
+      reflection limits still unmodeled in the editor — cosmetic.)
+- [x] **Row 6 preset names — all match** (2026-07-19); the manual-derived table
+      was correct.
 - [x] **MIDI Clock patch source — verified 2026-07-19.** The unit follows the
       editor's built-in clock generator (24 ppqn, timestamp-scheduled); AUTO
       BOUNCE ships with the clock patch factory-wired and reacts as expected.
